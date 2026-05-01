@@ -1,0 +1,144 @@
+// This is your Prisma schema file
+// Final Version optimized for UKK - Catering App
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+// ========== MODELS ==========
+
+model User {
+  id        Int      @id @default(autoincrement())
+  name      String
+  email     String   @unique
+  password  String   // Hashed password
+  level     String   @default("admin") // 'admin' | 'owner' | 'kurir'
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  // Relations
+  pengirimans Pengiriman[]
+
+  @@map("users")
+}
+
+model Pelanggan {
+  id            Int      @id @default(autoincrement())
+  namaPelanggan String   @map("nama_pelanggan")
+  email         String?  @unique
+  password      String?  
+  alamat1       String?
+  address2      String?  @map("alamat2")
+  address3      String?  @map("alamat3")
+  noTelp        String?  @map("no_telp")
+  foto          String?
+  createdAt     DateTime @default(now()) @map("created_at")
+  updatedAt     DateTime @updatedAt @map("updated_at")
+
+  // Relations
+  pemesanans    Pemesanan[]
+
+  @@map("pelanggans")
+}
+
+model Paket {
+  id           Int      @id @default(autoincrement())
+  namaPaket    String   @map("nama_paket")
+  menuPaket    String   @map("menu_paket")
+  kategori     String   // 'Pernikahan', 'Selametan', 'Ulang Tahun'
+  hargaPaket   Float    @map("harga_paket") // Gunakan Float untuk SQLite
+  foto         String?
+  createdAt    DateTime @default(now()) @map("created_at")
+  updatedAt    DateTime @updatedAt @map("updated_at")
+
+  // Relations
+  detailPemesanans DetailPemesanan[]
+
+  @@map("pakets")
+}
+
+model Pemesanan {
+  id                Int      @id @default(autoincrement())
+  idPelanggan       Int      @map("id_pelanggan")
+  idJenisPembayaran Int?     @map("id_jenis_pembayaran")
+  tanggalPemesanan  DateTime @default(now()) @map("tanggal_pemesanan")
+  tanggalAcara      DateTime @map("tanggal_acara")
+  totalHarga        Float    @map("total_harga")
+  statusPesanan     String   @default("Menunggu_Konfirmasi") @map("status_pesanan")
+  createdAt         DateTime @default(now()) @map("created_at")
+  updatedAt         DateTime @updatedAt @map("updated_at")
+
+  // Relations (Nama relasi dirapikan ke camelCase)
+  pelanggan       Pelanggan       @relation(fields: [idPelanggan], references: [id], onDelete: Cascade)
+  jenisPembayaran JenisPembayaran? @relation(fields: [idJenisPembayaran], references: [id])
+  detailPemesanans DetailPemesanan[]
+  pengiriman       Pengiriman?
+
+  @@map("pemesanans")
+}
+
+model DetailPemesanan {
+  id           Int      @id @default(autoincrement())
+  idPemesanan  Int      @map("id_pemesanan")
+  idPaket      Int      @map("id_paket")
+  jumlah       Int
+  subtotal     Float
+  createdAt    DateTime @default(now()) @map("created_at")
+  updatedAt    DateTime @updatedAt @map("updated_at")
+
+  // Relations
+  pemesanan    Pemesanan @relation(fields: [idPemesanan], references: [id], onDelete: Cascade)
+  paket        Paket     @relation(fields: [idPaket], references: [id])
+
+  @@map("detail_pemesanans")
+}
+
+model Pengiriman {
+  id           Int       @id @default(autoincrement())
+  idPesan      Int       @unique @map("id_pesan")
+  kurirId      Int?      @map("kurir_id") // Konsisten menggunakan @map
+  tanggalKirim DateTime? @map("tanggal_kirim")
+  statusKirim  String    @default("Belum_Dikirim") @map("status_kirim")
+  buktiFoto    String?   @map("bukti_foto")
+  createdAt    DateTime  @default(now()) @map("created_at")
+  updatedAt    DateTime  @updatedAt @map("updated_at")
+
+  // Relations
+  pemesanan    Pemesanan @relation(fields: [idPesan], references: [id], onDelete: Cascade)
+  kurir        User?     @relation(fields: [kurirId], references: [id])
+
+  @@map("pengirimans")
+}
+
+model JenisPembayaran {
+  id             Int      @id @default(autoincrement())
+  namaPembayaran String   @map("nama_pembayaran")
+  createdAt      DateTime @default(now()) @map("created_at")
+  updatedAt      DateTime @updatedAt @map("updated_at")
+
+  // Relations
+  detailJenisPembayarans DetailJenisPembayaran[]
+  pemesanans             Pemesanan[]
+
+  @@map("jenispembayarans")
+}
+
+model DetailJenisPembayaran {
+  id                Int      @id @default(autoincrement())
+  idJenisPembayaran Int      @map("id_jenis_pembayaran")
+  tempatPembayaran  String?  @map("tempat_pembayaran")
+  noRekening        String?  @map("no_rekening")
+  logoPembayaran    String?  @map("logo_pembayaran")
+  createdAt         DateTime @default(now()) @map("created_at")
+  updatedAt         DateTime @updatedAt @map("updated_at")
+
+  // Relations
+  jenisPembayaran   JenisPembayaran @relation(fields: [idJenisPembayaran], references: [id], onDelete: Cascade)
+
+  @@map("detailjenispembayarans")
+}
