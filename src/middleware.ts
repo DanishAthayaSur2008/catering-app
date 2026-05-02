@@ -20,29 +20,35 @@ export default async function middleware(request: NextRequest) {
 
   const userLevel = session.user.level;
 
-  // 🚫 STRICT BLOCK: Admin-only routes (HAPUS '/dashboard' dari sini)
-  const adminOnlyRoutes = ["/laporan", "/pelanggan"]; // ✅ '/dashboard' dihapus
+  // 🚫 STRICT BLOCK: Admin-only routes (PELANGGAN TIDAK BOLEH AKSES)
+  const adminOnlyRoutes = ["/dashboard", "/laporan", "/pelanggan", "/pesanan"]; // ✅ Tambah '/pesanan' di sini!
   if (adminOnlyRoutes.some((route) => pathname.startsWith(route))) {
     if (userLevel !== "admin" && userLevel !== "owner") {
-      // Pelanggan/Kurir yang maksa akses admin route → redirect ke halaman mereka
-      const fallbackUrl = userLevel === "pelanggan" ? "/profil" : "/pengiriman";
+      // Pelanggan → redirect ke /pesan | Kurir → redirect ke /pengiriman
+      const fallbackUrl = userLevel === "pelanggan" ? "/pesan" : "/pengiriman";
       return NextResponse.redirect(new URL(fallbackUrl, request.url));
     }
   }
 
-  // ✅ ROLE: Pelanggan (Customer)
-  // src/middleware.ts (bagian pelanggan)
+  // ✅ ROLE: Pelanggan (Customer) - Hanya boleh akses route customer
   if (userLevel === "pelanggan") {
-    const allowedRoutes = ["/pesan", "/pesanan", "/profil", "/dashboard"]; // ✅ Tambah /pesan
+    const allowedRoutes = [
+      "/pesan",
+      "/pesanan-saya",
+      "/profil", 
+      "/pembayaran",
+      "/tracking",
+      "/paket", // ✅ Tambah /paket agar bisa browse
+    ];
     const isAllowed = allowedRoutes.some((route) => pathname.startsWith(route));
     if (!isAllowed) {
-      return NextResponse.redirect(new URL("/pesan", request.url)); // ✅ Redirect ke /pesan
+      return NextResponse.redirect(new URL("/pesan", request.url));
     }
   }
 
   // ✅ ROLE: Kurir
   if (userLevel === "kurir" || userLevel === "kuri") {
-    const allowedRoutes = ["/pengiriman", "/dashboard"]; // ✅ Tambah '/dashboard'
+    const allowedRoutes = ["/pengiriman"];
     const isAllowed = allowedRoutes.some((route) => pathname.startsWith(route));
     if (!isAllowed) {
       return NextResponse.redirect(new URL("/pengiriman", request.url));
@@ -51,6 +57,11 @@ export default async function middleware(request: NextRequest) {
 
   // ✅ ROLE: Admin & Owner
   if (userLevel === "admin" || userLevel === "owner") {
+    // Redirect admin yang nyasar ke route customer
+    if (pathname.startsWith("/pesanan-saya") || pathname.startsWith("/pesan")) {
+      return NextResponse.redirect(new URL("/dashboard", request.url));
+    }
+
     const allowedRoutes = [
       "/dashboard",
       "/pelanggan",

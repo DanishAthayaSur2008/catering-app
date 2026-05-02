@@ -1,5 +1,5 @@
 // This is your Prisma schema file
-// Final Version optimized for UKK - Catering App
+// Final Version optimized for UKK - Catering App (SQLite Compatible)
 
 generator client {
   provider = "prisma-client-js"
@@ -17,7 +17,8 @@ model User {
   name      String
   email     String   @unique
   password  String   // Hashed password
-  level     String   @default("admin") // 'admin' | 'owner' | 'kurir'
+  // ✅ Level: 'admin' | 'owner' | 'kurir' | 'pelanggan' (String, bukan enum untuk SQLite)
+  level     String   @default("admin")
   createdAt DateTime @default(now()) @map("created_at")
   updatedAt DateTime @updatedAt @map("updated_at")
 
@@ -31,7 +32,7 @@ model Pelanggan {
   id            Int      @id @default(autoincrement())
   namaPelanggan String   @map("nama_pelanggan")
   email         String?  @unique
-  password      String?  
+  password      String?  // Hashed password untuk login pelanggan
   alamat1       String?
   address2      String?  @map("alamat2")
   address3      String?  @map("alamat3")
@@ -50,9 +51,12 @@ model Paket {
   id           Int      @id @default(autoincrement())
   namaPaket    String   @map("nama_paket")
   menuPaket    String   @map("menu_paket")
-  kategori     String   // 'Pernikahan', 'Selametan', 'Ulang Tahun'
-  hargaPaket   Float    @map("harga_paket") // Gunakan Float untuk SQLite
+  // ✅ Kategori: 'Pernikahan' | 'Selametan' | 'Ulang Tahun' | 'Kantor' (String untuk SQLite)
+  kategori     String
+  hargaPaket   Float    @map("harga_paket")
   foto         String?
+  // ✅ Status: 'aktif' | 'nonaktif'
+  statusPaket  String   @default("aktif")
   createdAt    DateTime @default(now()) @map("created_at")
   updatedAt    DateTime @updatedAt @map("updated_at")
 
@@ -69,9 +73,26 @@ model Pemesanan {
   tanggalPemesanan  DateTime @default(now()) @map("tanggal_pemesanan")
   tanggalAcara      DateTime @map("tanggal_acara")
   totalHarga        Float    @map("total_harga")
+  // ✅ Status Pesanan: 'Menunggu_Konfirmasi' | 'Sedang_Diproses' | 'Menunggu_Kurir' | 'Sedang_Dikirim' | 'Tiba_Ditujuan' | 'Selesai' | 'Dibatalkan'
   statusPesanan     String   @default("Menunggu_Konfirmasi") @map("status_pesanan")
+  // ✅ Catatan dari pelanggan (opsional)
+  catatan           String?
   createdAt         DateTime @default(now()) @map("created_at")
   updatedAt         DateTime @updatedAt @map("updated_at")
+
+  // ✅ Payment Fields (Aktifkan!)
+  // ✅ Status Pembayaran: 'Menunggu_Pembayaran' | 'Menunggu_Konfirmasi_Bayar' | 'Lunas' | 'Gagal' | 'Refund'
+  statusPembayaran  String?  @default("Menunggu_Pembayaran") @map("status_pembayaran")
+  // ✅ Metode Pembayaran: 'Transfer_Bank' | 'E_Wallet' | 'COD'
+  metodePembayaran  String?  @map("metode_pembayaran")
+  // ✅ Bukti transfer (URL upload)
+  buktiBayar        String?  @map("bukti_bayar")
+  // ✅ Tanggal bayar dikonfirmasi
+  tanggalBayar      DateTime? @map("tanggal_bayar")
+  // ✅ Kode unik untuk verifikasi otomatis (opsional)
+  kodeUnik          Int?     @map("kode_unik")
+  // ✅ Catatan admin untuk pembayaran/refund
+  adminCatatan      String?  @map("admin_catatan")
 
   // Relations (Nama relasi dirapikan ke camelCase)
   pelanggan       Pelanggan       @relation(fields: [idPelanggan], references: [id], onDelete: Cascade)
@@ -101,10 +122,20 @@ model DetailPemesanan {
 model Pengiriman {
   id           Int       @id @default(autoincrement())
   idPesan      Int       @unique @map("id_pesan")
-  kurirId      Int?      @map("kurir_id") // Konsisten menggunakan @map
+  kurirId      Int?      @map("kurir_id")
   tanggalKirim DateTime? @map("tanggal_kirim")
+  // ✅ Status Kirim: 'Belum_Dikirim' | 'Sedang_Dikirim' | 'Tiba_Ditujuan'
   statusKirim  String    @default("Belum_Dikirim") @map("status_kirim")
   buktiFoto    String?   @map("bukti_foto")
+  // ✅ Alamat tujuan (override jika beda dari alamat pelanggan)
+  alamatTujuan String?   @map("alamat_tujuan")
+  // ✅ No. resi / kode tracking
+  noResi       String?   @map("no_resi")
+  // ✅ Estimasi & aktual tiba
+  estimasiTiba DateTime? @map("estimasi_tiba")
+  aktualTiba   DateTime? @map("aktual_tiba")
+  // ✅ Catatan dari kurir
+  catatanKurir String?   @map("catatan_kurir")
   createdAt    DateTime  @default(now()) @map("created_at")
   updatedAt    DateTime  @updatedAt @map("updated_at")
 

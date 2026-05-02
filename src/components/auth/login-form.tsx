@@ -39,7 +39,7 @@ export function LoginForm() {
   const searchParams = useSearchParams();
   const [isLoading, setIsLoading] = useState(false);
   
-  const callbackUrl = searchParams.get("callbackUrl") || "/dashboard";
+  const callbackUrl = searchParams.get("callbackUrl") || "/pesan";
 
   const form = useForm<LoginFormValues>({
     resolver: zodResolver(loginSchema),

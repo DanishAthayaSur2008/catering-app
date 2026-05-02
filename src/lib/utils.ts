@@ -39,3 +39,24 @@ export function getStatusColor(status: string): string {
   };
   return colors[status] || "bg-gray-100 text-gray-800 hover:bg-gray-100";
 }
+
+// Tambahkan ini di src/lib/utils.ts
+export function getStatusPesananColor(status: string) {
+  switch (status) {
+    case "Menunggu_Konfirmasi": return "bg-yellow-500 text-white";
+    case "Sedang_Diproses": return "bg-blue-500 text-white";
+    case "Tiba_Ditujuan": return "bg-purple-500 text-white";
+    case "Selesai": return "bg-green-500 text-white";
+    case "Dibatalkan": return "bg-red-500 text-white";
+    default: return "bg-gray-500 text-white";
+  }
+}
+
+export function getStatusPembayaranColor(status: string) {
+  switch (status) {
+    case "Lunas": return "text-green-600 border-green-600";
+    case "Refund": return "text-orange-600 border-orange-600";
+    case "Gagal": return "text-red-600 border-red-600";
+    default: return "text-yellow-600 border-yellow-600";
+  }
+}

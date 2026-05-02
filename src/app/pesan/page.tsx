@@ -1,7 +1,10 @@
 import { prisma } from "@/lib/prisma";
 import { auth } from "@/lib/auth";
 import { redirect } from "next/navigation";
+import { CustomerHeader } from "@/components/layout/customer-header";
 import { OrderForm } from "@/components/pesan/order-form";
+import { STATUS_PAKET } from "@/types/enums";
+
 
 export default async function PesanPage() {
   const session = await auth();
@@ -12,7 +15,9 @@ export default async function PesanPage() {
     .findMany({
       where: {
         // Hapus statusPaket, atau tambahkan field ini ke schema jika memang butuh
+        statusPaket: STATUS_PAKET.AKTIF, // Hanya ambil paket yang aktif
       },
+      orderBy: { namaPaket: "asc" },
       select: {
         id: true,
         namaPaket: true,
@@ -31,5 +36,12 @@ export default async function PesanPage() {
       })),
     );
 
-  return <OrderForm packages={packages} />;
+  return (
+    <div className="min-h-screen bg-background">
+      <CustomerHeader />
+      <main className="container py-6">
+        <OrderForm packages={packages} />
+      </main>
+    </div>
+  );
 }
