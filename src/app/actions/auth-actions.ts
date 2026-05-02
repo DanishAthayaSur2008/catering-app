@@ -5,7 +5,6 @@ import { z } from "zod";
 import { prisma } from "@/lib/prisma";
 import bcrypt from "bcryptjs";
 import { signOut } from "@/lib/auth"; // ✅ Import signOut dari auth config lo
-import { revalidatePath } from "next/cache";
 
 export async function registerPelanggan(formData: FormData): Promise<{ success: boolean; message: string }> {
   try {
@@ -55,17 +54,8 @@ export async function registerPelanggan(formData: FormData): Promise<{ success: 
     return { success: false, message: "Terjadi kesalahan server" };
   }
 }
-
-
-/// ✅ LOGOUT ACTION (async function - OK)
-export async function logout(): Promise<{ success: boolean; message: string }> {
-  try {
-    // ✅ signOut dipanggil di DALAM async function, bukan di-export
-    await signOut({ redirectTo: "/auth/login" });
-    revalidatePath("/");
-    return { success: true, message: "Berhasil logout" };
-  } catch (error) {
-    console.error("Logout error:", error);
-    return { success: false, message: "Gagal logout" };
-  }
+// ✅ LOGOUT ACTION - Simple, tanpa try-catch, tanpa redirectTo
+export async function logout(): Promise<void> {
+  // ✅ signOut() tanpa opsi → tidak throw NEXT_REDIRECT yang tertangkap client
+  await signOut();
 }

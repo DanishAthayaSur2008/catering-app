@@ -67,7 +67,7 @@ export function Header({ user }: HeaderProps) {
             <DropdownMenuItem>Profil</DropdownMenuItem>
             <DropdownMenuItem>Settings</DropdownMenuItem>
             <DropdownMenuSeparator />
-            <LogoutButton asDropdownItem />
+            <LogoutButton />
           </DropdownMenuContent>
         </DropdownMenu>
       </div>

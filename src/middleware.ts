@@ -31,18 +31,19 @@ export default async function middleware(request: NextRequest) {
   }
 
   // ✅ ROLE: Pelanggan (Customer)
+  // src/middleware.ts (bagian pelanggan)
   if (userLevel === "pelanggan") {
-    const allowedRoutes = ["/profil", "/paket", "/pesanan", "/pengiriman", "/dashboard"]; // ✅ Tambah '/dashboard'
-    const isAllowed = allowedRoutes.some(route => pathname.startsWith(route));
+    const allowedRoutes = ["/pesan", "/pesanan", "/profil", "/dashboard"]; // ✅ Tambah /pesan
+    const isAllowed = allowedRoutes.some((route) => pathname.startsWith(route));
     if (!isAllowed) {
-      return NextResponse.redirect(new URL("/profil", request.url));
+      return NextResponse.redirect(new URL("/pesan", request.url)); // ✅ Redirect ke /pesan
     }
   }
 
   // ✅ ROLE: Kurir
   if (userLevel === "kurir" || userLevel === "kuri") {
     const allowedRoutes = ["/pengiriman", "/dashboard"]; // ✅ Tambah '/dashboard'
-    const isAllowed = allowedRoutes.some(route => pathname.startsWith(route));
+    const isAllowed = allowedRoutes.some((route) => pathname.startsWith(route));
     if (!isAllowed) {
       return NextResponse.redirect(new URL("/pengiriman", request.url));
     }
@@ -50,8 +51,15 @@ export default async function middleware(request: NextRequest) {
 
   // ✅ ROLE: Admin & Owner
   if (userLevel === "admin" || userLevel === "owner") {
-    const allowedRoutes = ["/dashboard", "/pelanggan", "/paket", "/pesanan", "/pengiriman", "/laporan"];
-    const isAllowed = allowedRoutes.some(route => pathname.startsWith(route));
+    const allowedRoutes = [
+      "/dashboard",
+      "/pelanggan",
+      "/paket",
+      "/pesanan",
+      "/pengiriman",
+      "/laporan",
+    ];
+    const isAllowed = allowedRoutes.some((route) => pathname.startsWith(route));
     if (!isAllowed) {
       return NextResponse.redirect(new URL("/dashboard", request.url));
     }
