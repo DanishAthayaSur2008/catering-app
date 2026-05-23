@@ -220,8 +220,7 @@ export default async function PesananPage({ searchParams }: PesananPageProps) {
                                 pelanggan: p.pelanggan ? {
                                   id: p.pelanggan.id,
                                   namaPelanggan: p.pelanggan.namaPelanggan,
-                                  foto: p.pelanggan.foto ? bufferToBase64(p.pelanggan.foto) : null
-                                } : { id: 0, namaPelanggan: "Tanpa Nama", foto: null },
+                                } : { id: 0, namaPelanggan: "Tanpa Nama" },
                                 // ✅ Mengamankan array detail & objek paket di dalamnya jika bernilai null
                                 detailPemesanans: p.detailPemesanans.map((d) => ({
                                   id: d.id,
