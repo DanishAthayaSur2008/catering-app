@@ -48,7 +48,7 @@ export default function LandingPage() {
               <UtensilsCrossed className="h-5 w-5 text-white" />
             </div>
             <span className="text-xl font-black tracking-tighter italic">
-              Catering<span className="text-orange-500">Ku.</span>
+              Catering<span className="text-orange-500">Pro.</span>
             </span>
           </div>
           <div className="flex items-center gap-6">
