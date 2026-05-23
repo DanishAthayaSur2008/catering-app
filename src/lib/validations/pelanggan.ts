@@ -1,6 +1,4 @@
 // src/lib/validations/pelanggan.ts
-// ⚠️ JANGAN pakai "use server" di file ini!
-
 import { z } from "zod";
 
 export const pelangganSchema = z.object({
@@ -9,6 +7,7 @@ export const pelangganSchema = z.object({
   alamat2: z.string().optional(),
   alamat3: z.string().optional(),
   no_telp: z.string().min(10, "Nomor telepon tidak valid"),
+  foto: z.any().optional(), // 👈 Diubah menjadi z.any() agar mendukung objek File / biner dari client
 });
 
 export type PelangganFormData = z.infer<typeof pelangganSchema>;

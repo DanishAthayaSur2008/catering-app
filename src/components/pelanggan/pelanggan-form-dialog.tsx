@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-unused-vars */
 "use client";
 
 import { useState, useTransition } from "react";
@@ -46,7 +47,7 @@ import {
   pelangganSchema,
   type PelangganFormData,
   type ActionResponse
-} from "@/lib/validations/pelanggan"; // ✅ Import schema dari file terpisah
+} from "@/lib/validations/pelanggan";
 
 interface PelangganFormDialogProps {
   pelanggan?: {
@@ -74,22 +75,39 @@ export function PelangganFormDialog({ pelanggan, mode = "create" }: PelangganFor
       alamat2: pelanggan?.alamat2 || "",
       alamat3: pelanggan?.alamat3 || "",
       no_telp: pelanggan?.noTelp || "",
-      foto: pelanggan?.foto || "",
+      foto: undefined, // Mulai dengan kosong untuk input file baru
     },
   });
 
   async function onSubmit(values: PelangganFormData) {
     startTransition(async () => {
+      // 🛠️ BUNGKUS KE FORMDATA AGAR SESUAI DENGAN SERVER ACTIONS
+      const formData = new FormData();
+      formData.append("nama_pelanggan", values.nama_pelanggan);
+      formData.append("no_telp", values.no_telp);
+      formData.append("alamat1", values.alamat1);
+      if (values.alamat2) formData.append("alamat2", values.alamat2);
+      if (values.alamat3) formData.append("alamat3", values.alamat3);
+      
+      // Masukkan file jika ada file baru yang dipilih
+      if (values.foto instanceof File) {
+        formData.append("foto", values.foto);
+      }
+
+      // Jika dalam mode edit, kirimkan juga ID pelanggan di dalam FormData
+      if (mode === "edit" && pelanggan) {
+        formData.append("id", pelanggan.id.toString());
+      }
+
       const result: ActionResponse = mode === "create"
-        ? await createPelanggan(values)
-        : await updatePelanggan(pelanggan!.id, values);
+        ? await createPelanggan(formData)
+        : await updatePelanggan(formData);
 
       if (result.success) {
         toast.success(result.message);
         setOpen(false);
         form.reset();
       } else if (result.errors) {
-        // ✅ FIX: Proper type handling for errors
         const fieldErrors = result.errors as Record<string, string[]>;
         Object.entries(fieldErrors).forEach(([field, messages]) => {
           messages?.forEach((msg: string) => {
@@ -120,7 +138,6 @@ export function PelangganFormDialog({ pelanggan, mode = "create" }: PelangganFor
 
   return (
     <>
-      {/* Main Dialog */}
       <Dialog open={open} onOpenChange={setOpen}>
         <DialogTrigger asChild>
           {mode === "create" ? (
@@ -141,9 +158,7 @@ export function PelangganFormDialog({ pelanggan, mode = "create" }: PelangganFor
               {mode === "create" ? "Tambah Pelanggan Baru" : "Edit Data Pelanggan"}
             </DialogTitle>
             <DialogDescription>
-              {mode === "create"
-                ? "Isi data pelanggan di bawah ini."
-                : "Perbarui informasi pelanggan."}
+              {mode === "create" ? "Isi data pelanggan di bawah ini." : "Perbarui informasi pelanggan."}
             </DialogDescription>
           </DialogHeader>
 
@@ -199,7 +214,7 @@ export function PelangganFormDialog({ pelanggan, mode = "create" }: PelangganFor
                 )}
               />
 
-              {/* Alamat 2 (Opsional) */}
+              {/* Alamat 2 */}
               <FormField
                 control={form.control}
                 name="alamat2"
@@ -214,7 +229,7 @@ export function PelangganFormDialog({ pelanggan, mode = "create" }: PelangganFor
                 )}
               />
 
-              {/* Alamat 3 (Opsional) */}
+              {/* Alamat 3 */}
               <FormField
                 control={form.control}
                 name="alamat3"
@@ -229,15 +244,23 @@ export function PelangganFormDialog({ pelanggan, mode = "create" }: PelangganFor
                 )}
               />
 
-              {/* Foto URL (Opsional) */}
+              {/* Foto File Upload - 📸 KINI MENGGUNAKAN INPUT FILE NATIVE */}
               <FormField
                 control={form.control}
                 name="foto"
-                render={({ field }) => (
+                render={({ field: { value, onChange, ...fieldProps } }) => (
                   <FormItem>
-                    <FormLabel>URL Foto</FormLabel>
+                    <FormLabel>Foto Pelanggan</FormLabel>
                     <FormControl>
-                      <Input placeholder="https://example.com/foto.jpg" {...field} />
+                      <Input
+                        type="file"
+                        accept="image/*"
+                        onChange={(e) => {
+                          const file = e.target.files?.[0] || null;
+                          onChange(file); // Set data objek file langsung ke React Hook Form
+                        }}
+                        {...fieldProps}
+                      />
                     </FormControl>
                     <FormMessage />
                   </FormItem>
@@ -245,7 +268,6 @@ export function PelangganFormDialog({ pelanggan, mode = "create" }: PelangganFor
               />
 
               <DialogFooter className="gap-2 sm:gap-0">
-                {/* Delete Button (hanya untuk mode edit) */}
                 {mode === "edit" && (
                   <Button
                     type="button"
