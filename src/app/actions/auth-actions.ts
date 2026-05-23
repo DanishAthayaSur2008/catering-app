@@ -54,8 +54,8 @@ export async function registerPelanggan(formData: FormData): Promise<{ success: 
     return { success: false, message: "Terjadi kesalahan server" };
   }
 }
-// ✅ LOGOUT ACTION - Simple, tanpa try-catch, tanpa redirectTo
+// ✅ LOGOUT ACTION
 export async function logout(): Promise<void> {
-  // ✅ signOut() tanpa opsi → tidak throw NEXT_REDIRECT yang tertangkap client
-  await signOut();
+  // Tambahkan redirectTo untuk memastikan tidak ada salah arah saat signout
+  await signOut({ redirectTo: "/auth/login" });
 }

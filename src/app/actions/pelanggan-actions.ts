@@ -4,28 +4,44 @@
 import { z } from "zod";
 import { prisma } from "@/lib/prisma";
 import { revalidatePath } from "next/cache";
-import { auth } from "@/lib/auth"; // ✅ IMPORT SESSION
-import { pelangganSchema, type PelangganFormData, type ActionResponse } from "@/lib/validations/pelanggan";
+import { auth } from "@/lib/auth";
+import { fileToBuffer } from "@/lib/image-utils"; // ✅ Gunakan helper BLOB
+import { pelangganSchema, type ActionResponse } from "@/lib/validations/pelanggan";
 
-// ✅ CREATE - Hanya Admin/Owner
-export async function createPelanggan(formData: PelangganFormData): Promise<ActionResponse> {
+// ✅ CREATE - Hanya Admin/Owner (Diubah ke FormData agar mendukung upload foto BLOB)
+export async function createPelanggan(formData: FormData): Promise<ActionResponse> {
   const session = await auth();
   if (session?.user?.level !== "admin" && session?.user?.level !== "owner") {
     return { success: false, message: "Akses ditolak. Hanya admin/owner." };
   }
 
   try {
-    // Memperbaiki: data -> formData (sesuai parameter fungsi)
-    const validated = pelangganSchema.parse(formData);
+    const rawData = {
+      nama_pelanggan: formData.get("nama_pelanggan")?.toString() || "",
+      no_telp: formData.get("no_telp")?.toString() || "",
+      alamat1: formData.get("alamat1")?.toString() || "",
+      alamat2: formData.get("alamat2")?.toString() || "",
+      alamat3: formData.get("alamat3")?.toString() || "",
+    };
+
+    const validated = pelangganSchema.parse(rawData);
+    
+    // 📸 Proses File Foto ke Buffer (BLOB SQLite)
+    const fotoFile = formData.get("foto") as File | null;
+    let fotoBuffer: Buffer | undefined;
+    if (fotoFile && fotoFile.size > 0) {
+      fotoBuffer = await fileToBuffer(fotoFile);
+    }
     
     await prisma.pelanggan.create({
-      data: { // ✅ Tambahkan properti 'data' yang tadi hilang
+      data: {
         namaPelanggan: validated.nama_pelanggan,
         alamat1: validated.alamat1,
-        address2: validated.alamat2,
-        address3: validated.alamat3,
+        address2: validated.alamat2 || null,
+        address3: validated.alamat3 || null,
         noTelp: validated.no_telp,
-        foto: validated.foto,
+        // ✅ Hanya masukkan foto jika file diunggah oleh admin
+        ...(fotoBuffer && { foto: fotoBuffer }), 
       },
     });
 
@@ -40,43 +56,64 @@ export async function createPelanggan(formData: PelangganFormData): Promise<Acti
   }
 }
 
-// ✅ UPDATE - Pelanggan (hanya akun sendiri) | Admin/Owner (akun siapa saja)
-export async function updatePelanggan(id: number, formData: PelangganFormData): Promise<ActionResponse> {
+// ✅ UPDATE - Pelanggan (akun sendiri) | Admin/Owner (akun siapa saja)
+export async function updatePelanggan(formData: FormData): Promise<ActionResponse> {
   const session = await auth();
   if (!session?.user) return { success: false, message: "Harus login terlebih dahulu." };
 
-  // Note: Pastikan session.user.id dikonversi ke number jika id di DB adalah number
+  const rawId = formData.get("id");
+  const id = rawId ? Number(rawId) : null;
+
+  if (id === null || isNaN(id)) {
+    return { success: false, message: "ID Pelanggan tidak ditemukan atau tidak valid." };
+  }
+
   const isOwner = session.user.level === "pelanggan" && Number(session.user.id) === id;
   const isAdmin = session.user.level === "admin" || session.user.level === "owner";
 
   if (!isOwner && !isAdmin) {
-    return { success: false, message: "Akses ditolak. Anda hanya bisa mengedit profil sendiri." };
+    return { success: false, message: "Akses ditolak." };
   }
 
   try {
-    // Memperbaiki: data -> formData
-    const validated = pelangganSchema.parse(formData);
-    
+    const rawData = {
+      nama_pelanggan: formData.get("nama_pelanggan")?.toString() || "",
+      no_telp: formData.get("no_telp")?.toString() || "",
+      alamat1: formData.get("alamat1")?.toString() || "",
+      alamat2: formData.get("alamat2")?.toString() || "",
+      alamat3: formData.get("alamat3")?.toString() || "",
+    };
+
+    const validated = pelangganSchema.parse(rawData);
+
+    // 📸 Proses File Foto ke Buffer (BLOB SQLite)
+    const fotoFile = formData.get("foto") as File | null;
+    let fotoBuffer: Buffer | undefined;
+    if (fotoFile && fotoFile.size > 0) {
+      fotoBuffer = await fileToBuffer(fotoFile);
+    }
+
     await prisma.pelanggan.update({
-      where: { id },
-      data: { // ✅ Tambahkan properti 'data' yang tadi hilang
+      where: { id: id },
+      data: {
         namaPelanggan: validated.nama_pelanggan,
-        alamat1: validated.alamat1,
-        address2: validated.alamat2,
-        address3: validated.alamat3,
         noTelp: validated.no_telp,
-        foto: validated.foto,
+        alamat1: validated.alamat1,
+        address2: validated.alamat2 || null,
+        address3: validated.alamat3 || null,
+        // ✅ Hanya perbarui foto jika ada file baru yang dipilih
+        ...(fotoBuffer && { foto: fotoBuffer }),
       },
     });
 
     revalidatePath(isOwner ? "/profil" : "/pelanggan");
-    return { success: true, message: "Data pelanggan berhasil diperbarui!" };
+    return { success: true, message: "Profil berhasil diperbarui!" };
   } catch (error) {
     if (error instanceof z.ZodError) {
       return { success: false, message: "Validasi gagal", errors: error.flatten().fieldErrors };
     }
-    console.error("Update pelanggan error:", error);
-    return { success: false, message: "Terjadi kesalahan server" };
+    console.error("Update error:", error);
+    return { success: false, message: "Terjadi kesalahan server." };
   }
 }
 
@@ -88,24 +125,15 @@ export async function deletePelanggan(id: number): Promise<ActionResponse> {
   }
 
   try {
-    // Validasi apakah pelanggan punya relasi ke tabel pemesanan
-    const hasOrders = await prisma.pemesanan.count({
-      where: { idPelanggan: id }
-    });
-    
-    if (hasOrders > 0) {
-      return { success: false, message: "Tidak bisa hapus: Pelanggan memiliki riwayat pesanan!" };
-    }
+    const hasOrders = await prisma.pemesanan.count({ where: { idPelanggan: id } });
+    if (hasOrders > 0) return { success: false, message: "Gagal: Pelanggan punya riwayat transaksi!" };
 
-    await prisma.pelanggan.delete({
-      where: { id },
-    });
-
+    await prisma.pelanggan.delete({ where: { id } });
     revalidatePath("/pelanggan");
     return { success: true, message: "Pelanggan berhasil dihapus!" };
   } catch (error) {
-    console.error("Delete pelanggan error:", error);
-    return { success: false, message: "Gagal menghapus pelanggan" };
+    console.error("Detail Error:", error);
+    return { success: false, message: "Terjadi kesalahan pada server" };
   }
 }
 
@@ -114,21 +142,19 @@ export async function getPelanggans(search?: string) {
   const session = await auth();
   if (session?.user?.level !== "admin" && session?.user?.level !== "owner") return [];
 
-  const where = search ? {
-    OR: [
-      { namaPelanggan: { contains: search } },
-      { noTelp: { contains: search } },
-      { alamat1: { contains: search } },
-    ]
-  } : {};
-
   return prisma.pelanggan.findMany({
-    where,
+    where: search ? {
+      OR: [
+        { namaPelanggan: { contains: search } },
+        { noTelp: { contains: search } },
+        { alamat1: { contains: search } },
+      ]
+    } : {},
     orderBy: { createdAt: "desc" },
   });
 }
 
-// ✅ GET BY ID - Dengan validasi ownership
+// ✅ GET BY ID - Admin/Owner & Pengguna Terkait
 export async function getPelangganById(id: number) {
   const session = await auth();
   if (!session?.user) return null;
@@ -137,8 +163,5 @@ export async function getPelangganById(id: number) {
   const isAdmin = session.user.level === "admin" || session.user.level === "owner";
 
   if (!isOwner && !isAdmin) return null;
-
-  return prisma.pelanggan.findUnique({
-    where: { id },
-  });
+  return prisma.pelanggan.findUnique({ where: { id } });
 }

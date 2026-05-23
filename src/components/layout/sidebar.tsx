@@ -1,3 +1,4 @@
+// src/components/layout/sidebar.tsx
 "use client";
 
 import Link from "next/link";
@@ -10,11 +11,13 @@ import {
   ShoppingCart,
   Truck,
   FileBarChart,
-  LogOut,
+  CreditCard,
+  ChefHat, // ✅ Import ChefHat untuk menggantikan emoji biasa
 } from "lucide-react";
-import { Button } from "@/components/ui/button";
 import { useSession } from "next-auth/react";
 import { LogoutButton } from "@/components/auth/logout-button";
+
+type RoleType = keyof typeof ROLE_PERMISSIONS;
 
 interface SidebarProps {
   userRole: string | undefined;
@@ -53,6 +56,12 @@ const menuItems = [
     path: "/pengiriman",
   },
   {
+    icon: CreditCard,
+    label: "Metode Pembayaran",
+    value: MENU_OPTIONS.PAYMENT_METHODS,
+    path: "/payment-methods",
+  },
+  {
     icon: FileBarChart,
     label: "Laporan",
     value: MENU_OPTIONS.LAPORAN,
@@ -62,18 +71,28 @@ const menuItems = [
 
 export function Sidebar({ userRole, currentPath }: SidebarProps) {
   const { data: session } = useSession();
-  const allowedMenus = userRole ? ROLE_PERMISSIONS[userRole] || [] : [];
+  
+  
+  const allowedMenus = userRole 
+    ? ROLE_PERMISSIONS[userRole as RoleType] || [] 
+    : [];
 
   return (
-    <aside className="w-64 bg-white dark:bg-slate-800 border-r border-slate-200 dark:border-slate-700 flex flex-col">
-      {/* Logo */}
-      <div className="p-4 border-b border-slate-200 dark:border-slate-700">
-        <h1 className="text-xl font-bold text-slate-900 dark:text-white">
-          🍽️ CateringPro
-        </h1>
-        <p className="text-xs text-slate-500 dark:text-slate-400">
-          Management System
-        </p>
+    <aside className="w-64 h-screen bg-white dark:bg-slate-800 border-r border-slate-200 dark:border-slate-700 flex flex-col sticky top-0">
+      
+      {/* 🍽️ Logo Section - Sekarang diselaraskan dengan gaya visual halaman pelanggan */}
+      <div className="p-6 border-b border-slate-200 dark:border-slate-700 flex items-center gap-3">
+        <div className="h-10 w-10 bg-orange-50 dark:bg-orange-950/40 rounded-xl flex items-center justify-center text-orange-500 shrink-0 shadow-sm">
+          <ChefHat className="h-5 w-5" />
+        </div>
+        <div className="flex flex-col">
+          <h1 suppressHydrationWarning className="text-lg font-black text-slate-900 dark:text-white tracking-tight leading-none mb-1 italic">
+            Catering<span className="text-orange-500">Pro.</span>
+          </h1>
+          <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest leading-none">
+            Admin Panel
+          </p>
+        </div>
       </div>
 
       {/* Navigation */}
@@ -89,7 +108,7 @@ export function Sidebar({ userRole, currentPath }: SidebarProps) {
             <Link key={item.value} href={item.path}>
               <span
                 className={cn(
-                  "flex items-center gap-3 px-3 py-2 rounded-lg text-sm font-medium transition-colors",
+                  "flex items-center gap-3 px-3 py-2 rounded-lg text-sm font-medium transition-colors cursor-pointer",
                   isActive
                     ? "bg-primary text-primary-foreground"
                     : "text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700",
@@ -103,10 +122,19 @@ export function Sidebar({ userRole, currentPath }: SidebarProps) {
         })}
       </nav>
 
-      {/* Logout */}
-      <div className="flex items-center gap-2">
-        <span>Halo, {session?.user?.name}</span>
-        <LogoutButton /> {/* ✅ Tombol logout yang berfungsi */}
+      {/* Logout Section */}
+      <div className="p-4 border-t border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900/50">
+        <div className="flex items-center justify-between gap-2">
+          <div className="flex flex-col overflow-hidden">
+            <span className="text-[10px] uppercase font-bold text-slate-400">User Login</span>
+            <span className="text-sm font-semibold truncate text-slate-700 dark:text-slate-200">
+              {session?.user?.name || "User"}
+            </span>
+          </div>
+          <div className="shrink-0">
+            <LogoutButton />
+          </div>
+        </div>
       </div>
     </aside>
   );

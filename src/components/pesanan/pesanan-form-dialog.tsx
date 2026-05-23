@@ -47,7 +47,6 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 
 import { 
-  createPesanan, 
   updatePesanan, 
   deletePesanan,
   getPelangganOptions,
@@ -58,15 +57,19 @@ import {
   type PesananFormData,
   type ActionResponse,
   STATUS_PESANAN,
+  STATUS_PEMBAYARAN, // Di-import dari file validations
 } from "@/lib/validations/pesanan";
 import { formatRupiah } from "@/lib/utils";
 
 interface PesananFormDialogProps {
-  pesanan?: {
+  // ✅ Tambahkan properti mode jika Anda membutuhkannya di dalam dialog
+  mode?: "create" | "edit";
+  pesanan: {
     id: number;
     idPelanggan: number;
     tanggalAcara: Date | string;
     statusPesanan: string;
+    statusPembayaran?: string; // Menampung data status pembayaran awal
     totalHarga: number;
     pelanggan: { id: number; namaPelanggan: string };
     detailPemesanans: Array<{
@@ -74,26 +77,27 @@ interface PesananFormDialogProps {
       idPaket: number;
       jumlah: number;
       subtotal: number;
-      paket: { id: number; namaPaket: string; hargaPaket: number };
+      paket: { id: number; namaPaket: string; hargaPaket: number } | null; 
     }>;
   };
-  mode?: "create" | "edit";
 }
 
-export function PesananFormDialog({ pesanan, mode = "create" }: PesananFormDialogProps) {
+export function PesananFormDialog({ pesanan }: PesananFormDialogProps) {
   const [open, setOpen] = useState(false);
   const [deleteOpen, setDeleteOpen] = useState(false);
   const [isPending, startTransition] = useTransition();
   const [pelangganOptions, setPelangganOptions] = useState<Array<{id: number; namaPelanggan: string}>>([]);
   const [paketOptions, setPaketOptions] = useState<Array<{id: number; namaPaket: string; hargaPaket: number; kategori: string}>>([]);
 
+  // ✅ Hooks Form
   const form = useForm<PesananFormData>({
     resolver: zodResolver(pesananSchema),
     defaultValues: {
-      idPelanggan: pesanan?.idPelanggan || undefined,
+      idPelanggan: pesanan?.idPelanggan,
       tanggalAcara: pesanan?.tanggalAcara ? new Date(pesanan.tanggalAcara).toISOString().split("T")[0] : "",
       statusPesanan: pesanan?.statusPesanan || "Menunggu_Konfirmasi",
-      detailPemesanans: pesanan?.detailPemesanans.map((d) => ({
+      statusPembayaran: pesanan?.statusPembayaran || "Menunggu_Pembayaran", // Set nilai default dari database
+      detailPemesanans: pesanan?.detailPemesanans?.map((d) => ({
         idPaket: d.idPaket,
         jumlah: d.jumlah,
         subtotal: d.subtotal,
@@ -114,13 +118,13 @@ export function PesananFormDialog({ pesanan, mode = "create" }: PesananFormDialo
     }
   }, [open]);
 
-  // Calculate subtotal when package or quantity changes
+  if (!pesanan) return null;
+
   const calculateSubtotal = (idPaket: number, jumlah: number) => {
     const pkg = paketOptions.find((p) => p.id === idPaket);
     return pkg ? pkg.hargaPaket * jumlah : 0;
   };
 
-  // Calculate grand total
   const grandTotal = form.watch("detailPemesanans")?.reduce(
     (sum, item) => sum + (item.subtotal || 0), 
     0
@@ -128,7 +132,6 @@ export function PesananFormDialog({ pesanan, mode = "create" }: PesananFormDialo
 
   async function onSubmit(values: PesananFormData) {
     startTransition(async () => {
-      // Ensure all subtotals are calculated
       const processedValues = {
         ...values,
         detailPemesanans: values.detailPemesanans.map((item) => ({
@@ -137,9 +140,7 @@ export function PesananFormDialog({ pesanan, mode = "create" }: PesananFormDialo
         })),
       };
 
-      const result: ActionResponse = mode === "create" 
-        ? await createPesanan(processedValues)
-        : await updatePesanan(pesanan!.id, processedValues);
+      const result: ActionResponse = await updatePesanan(pesanan.id, processedValues);
 
       if (result.success) {
         toast.success(result.message);
@@ -159,8 +160,6 @@ export function PesananFormDialog({ pesanan, mode = "create" }: PesananFormDialo
   }
 
   async function handleDelete() {
-    if (!pesanan) return;
-    
     startTransition(async () => {
       const result = await deletePesanan(pesanan.id);
       
@@ -178,27 +177,16 @@ export function PesananFormDialog({ pesanan, mode = "create" }: PesananFormDialo
     <>
       <Dialog open={open} onOpenChange={setOpen}>
         <DialogTrigger asChild>
-          {mode === "create" ? (
-            <Button>
-              <Plus className="mr-2 h-4 w-4" />
-              Buat Pesanan
-            </Button>
-          ) : (
-            <Button variant="ghost" size="icon">
-              <Pencil className="h-4 w-4" />
-            </Button>
-          )}
+          <Button variant="ghost" size="icon">
+            <Pencil className="h-4 w-4" />
+          </Button>
         </DialogTrigger>
         
         <DialogContent className="sm:max-w-175 max-h-[90vh] overflow-y-auto">
           <DialogHeader>
-            <DialogTitle>
-              {mode === "create" ? "Buat Pesanan Baru" : "Edit Pesanan"}
-            </DialogTitle>
+            <DialogTitle>Edit Pesanan</DialogTitle>
             <DialogDescription>
-              {mode === "create" 
-                ? "Isi detail pesanan katering di bawah ini." 
-                : "Perbarui informasi pesanan."}
+              Perbarui informasi pesanan.
             </DialogDescription>
           </DialogHeader>
 
@@ -249,8 +237,8 @@ export function PesananFormDialog({ pesanan, mode = "create" }: PesananFormDialo
                 )}
               />
 
-              {/* Status (hanya untuk edit) */}
-              {mode === "edit" && (
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                {/* Status Pesanan */}
                 <FormField
                   control={form.control}
                   name="statusPesanan"
@@ -275,7 +263,33 @@ export function PesananFormDialog({ pesanan, mode = "create" }: PesananFormDialo
                     </FormItem>
                   )}
                 />
-              )}
+
+                {/* 🆕 BARU: Dropdown Status Pembayaran */}
+                <FormField
+                  control={form.control}
+                  name="statusPembayaran"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Status Pembayaran</FormLabel>
+                      <Select onValueChange={field.onChange} defaultValue={field.value}>
+                        <FormControl>
+                          <SelectTrigger>
+                            <SelectValue placeholder="Pilih status pembayaran" />
+                          </SelectTrigger>
+                        </FormControl>
+                        <SelectContent>
+                          {STATUS_PEMBAYARAN.map((status) => (
+                            <SelectItem key={status} value={status}>
+                              {status.replace(/_/g, " ")}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+              </div>
 
               {/* Detail Items - Multi Package */}
               <div className="space-y-3">
@@ -306,7 +320,6 @@ export function PesananFormDialog({ pesanan, mode = "create" }: PesananFormDialo
                                 onValueChange={(val) => {
                                   const pkgId = Number(val);
                                   itemField.onChange(pkgId);
-                                  // Auto-calculate subtotal
                                   const qty = form.getValues(`detailPemesanans.${index}.jumlah`) || 1;
                                   const subtotal = calculateSubtotal(pkgId, qty);
                                   form.setValue(`detailPemesanans.${index}.subtotal`, subtotal);
@@ -352,7 +365,6 @@ export function PesananFormDialog({ pesanan, mode = "create" }: PesananFormDialo
                                   onChange={(e) => {
                                     const qty = Number(e.target.value);
                                     itemField.onChange(qty);
-                                    // Auto-calculate subtotal
                                     const pkgId = form.getValues(`detailPemesanans.${index}.idPaket`);
                                     const subtotal = calculateSubtotal(pkgId, qty);
                                     form.setValue(`detailPemesanans.${index}.subtotal`, subtotal);
@@ -397,18 +409,16 @@ export function PesananFormDialog({ pesanan, mode = "create" }: PesananFormDialo
               </div>
 
               <DialogFooter className="gap-2 sm:gap-0">
-                {mode === "edit" && (
-                  <Button
-                    type="button"
-                    variant="destructive"
-                    onClick={() => setDeleteOpen(true)}
-                    disabled={isPending}
-                    className="sm:mr-auto"
-                  >
-                    <Trash2 className="mr-2 h-4 w-4" />
-                    Hapus
-                  </Button>
-                )}
+                <Button
+                  type="button"
+                  variant="destructive"
+                  onClick={() => setDeleteOpen(true)}
+                  disabled={isPending}
+                  className="sm:mr-auto"
+                >
+                  <Trash2 className="mr-2 h-4 w-4" />
+                  Hapus
+                </Button>
                 
                 <Button type="button" variant="outline" onClick={() => setOpen(false)}>
                   Batal
@@ -419,7 +429,7 @@ export function PesananFormDialog({ pesanan, mode = "create" }: PesananFormDialo
                       <Loader2 className="mr-2 h-4 w-4 animate-spin" />
                       Menyimpan...
                     </>
-                  ) : mode === "create" ? "Buat Pesanan" : "Perbarui"}
+                  ) : "Perbarui"}
                 </Button>
               </DialogFooter>
             </form>
@@ -433,7 +443,7 @@ export function PesananFormDialog({ pesanan, mode = "create" }: PesananFormDialo
           <AlertDialogHeader>
             <AlertDialogTitle>Hapus Pesanan?</AlertDialogTitle>
             <AlertDialogDescription>
-              Tindakan ini tidak dapat dibatalkan. Pesanan #{pesanan?.id} 
+              Tindakan ini tidak dapat dibatalkan. Pesanan #{pesanan.id} 
               akan dihapus permanen beserta semua detail itemnya.
             </AlertDialogDescription>
           </AlertDialogHeader>

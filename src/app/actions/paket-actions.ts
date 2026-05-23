@@ -1,28 +1,55 @@
 // src/app/actions/paket-actions.ts
 "use server";
-
 import { prisma } from "@/lib/prisma";
 import { revalidatePath } from "next/cache";
-// ✅ Import ActionResponse dari validations (JANGAN declare lokal!)
-import { paketSchema, type PaketFormData, type ActionResponse } from "@/lib/validations/paket";
+import { auth } from "@/lib/auth";
 import { z } from "zod";
 
-// ✅ CREATE - Parameter: data: PaketFormData (bukan cuma PaketFormData)
-export async function createPaket(data: PaketFormData): Promise<ActionResponse> {
+// Schema validasi (hanya teks, file divalidasi terpisah)
+const paketSchema = z.object({
+  nama_paket: z.string().min(3, "Nama paket minimal 3 karakter"),
+  menu_paket: z.string().min(5, "Deskripsi menu minimal 5 karakter"),
+  kategori: z.string(),
+  harga_paket: z.string().transform((val) => parseFloat(val.replace(/\./g, ""))), // Handle format rupiah
+});
+
+// ✅ Mengganti 'any' dengan tipe data fieldErrors bawaan Zod yang spesifik
+export async function createPaket(formData: FormData): Promise<{ success: boolean; message: string; errors?: Record<string, string[] | undefined> }> {
+  const session = await auth();
+  if (session?.user?.level !== "admin" && session?.user?.level !== "owner") {
+    return { success: false, message: "Akses ditolak" };
+  }
+
   try {
-    const validated = paketSchema.parse(data);
-    const harga = parseFloat(validated.harga_paket.replace(/\./g, "").replace(",", "."));
-    
+    // 1. Validasi teks
+    const validated = paketSchema.parse({
+      nama_paket: formData.get("nama_paket"),
+      menu_paket: formData.get("menu_paket"),
+      kategori: formData.get("kategori"),
+      harga_paket: formData.get("harga_paket"),
+    });
+
+    // 2. Handle Upload Foto (BLOB)
+    const fotoFile = formData.get("foto") as File | null;
+    let fotoBuffer: Buffer | null = null;
+
+    if (fotoFile && fotoFile.size > 0) {
+      const arrayBuffer = await fotoFile.arrayBuffer();
+      fotoBuffer = Buffer.from(arrayBuffer);
+    }
+
+    // 3. Simpan ke DB
     await prisma.paket.create({
-      data: {  // ✅ WAJIB: 'data:' key untuk Prisma create
+      data: {
         namaPaket: validated.nama_paket,
         menuPaket: validated.menu_paket,
         kategori: validated.kategori,
-        hargaPaket: isNaN(harga) ? 0 : harga,
-        foto: validated.foto || null,
+        hargaPaket: validated.harga_paket,
+        foto: fotoBuffer, // Simpan Buffer langsung ke field Bytes
+        statusPaket: "aktif",
       },
     });
-    
+
     revalidatePath("/paket");
     return { success: true, message: "Paket berhasil ditambahkan!" };
   } catch (error) {
@@ -34,23 +61,48 @@ export async function createPaket(data: PaketFormData): Promise<ActionResponse> 
   }
 }
 
-// ✅ UPDATE - Parameter: data: PaketFormData
-export async function updatePaket(id: number, data: PaketFormData): Promise<ActionResponse> {
+// ✅ Mengganti 'any' dengan tipe data fieldErrors bawaan Zod yang spesifik
+export async function updatePaket(id: number, formData: FormData): Promise<{ success: boolean; message: string; errors?: Record<string, string[] | undefined> }> {
+  const session = await auth();
+  if (session?.user?.level !== "admin" && session?.user?.level !== "owner") {
+    return { success: false, message: "Akses ditolak" };
+  }
+
   try {
-    const validated = paketSchema.parse(data);
-    const harga = parseFloat(validated.harga_paket.replace(/\./g, "").replace(",", "."));
+    const validated = paketSchema.parse({
+      nama_paket: formData.get("nama_paket"),
+      menu_paket: formData.get("menu_paket"),
+      kategori: formData.get("kategori"),
+      harga_paket: formData.get("harga_paket"),
+    });
+
+    // Handle Update Foto (Opsional: jika user upload baru, timpa yang lama)
+    const fotoFile = formData.get("foto") as File | null;
     
+    // ✅ Mengganti 'any' dengan deklarasi tipe objek yang strict & aman
+    const updateData: {
+      namaPaket: string;
+      menuPaket: string;
+      kategori: string;
+      hargaPaket: number;
+      foto?: Buffer;
+    } = {
+      namaPaket: validated.nama_paket,
+      menuPaket: validated.menu_paket,
+      kategori: validated.kategori,
+      hargaPaket: validated.harga_paket,
+    };
+
+    if (fotoFile && fotoFile.size > 0) {
+      const arrayBuffer = await fotoFile.arrayBuffer();
+      updateData.foto = Buffer.from(arrayBuffer);
+    }
+
     await prisma.paket.update({
       where: { id },
-      data: {  // ✅ WAJIB: 'data:' key untuk Prisma update
-        namaPaket: validated.nama_paket,
-        menuPaket: validated.menu_paket,
-        kategori: validated.kategori,
-        hargaPaket: isNaN(harga) ? 0 : harga,
-        foto: validated.foto || null,
-      },
+      data: updateData,
     });
-    
+
     revalidatePath("/paket");
     return { success: true, message: "Paket berhasil diperbarui!" };
   } catch (error) {
@@ -58,27 +110,24 @@ export async function updatePaket(id: number, data: PaketFormData): Promise<Acti
       return { success: false, message: "Validasi gagal", errors: error.flatten().fieldErrors };
     }
     console.error("Update paket error:", error);
-    return { success: false, message: "Terjadi kesalahan server" };
+    return { success: false, message: "Gagal update paket" };
   }
 }
 
-// ✅ DELETE
-export async function deletePaket(id: number): Promise<ActionResponse> {
+export async function deletePaket(id: number): Promise<{ success: boolean; message: string }> {
+  const session = await auth();
+  if (session?.user?.level !== "admin" && session?.user?.level !== "owner") {
+    return { success: false, message: "Akses ditolak" };
+  }
+  
   try {
-    const hasOrders = await prisma.detailPemesanan.count({
-      where: { idPaket: id }
-    });
-    
-    if (hasOrders > 0) {
-      return { success: false, message: "Tidak bisa hapus: Paket memiliki riwayat pesanan!" };
-    }
-    
     await prisma.paket.delete({ where: { id } });
     revalidatePath("/paket");
-    return { success: true, message: "Paket berhasil dihapus!" };
+    return { success: true, message: "Paket dihapus" };
   } catch (error) {
+    // ✅ Menambahkan console.error agar variabel 'error' terpakai dan tidak melanggar aturan no-unused-vars
     console.error("Delete paket error:", error);
-    return { success: false, message: "Gagal menghapus paket" };
+    return { success: false, message: "Gagal hapus paket" };
   }
 }
 

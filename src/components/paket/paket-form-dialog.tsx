@@ -1,10 +1,10 @@
 "use client";
 
-import { useState, useTransition } from "react";
+import { useState, useTransition, useRef } from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { toast } from "sonner";
-import { Loader2, Plus, Pencil, Trash2, Image as ImageIcon } from "lucide-react";
+import { Loader2, Plus, Pencil, Trash2, Image as ImageIcon, X } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import {
@@ -44,13 +44,11 @@ import {
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 
-// ✅ HANYA import functions dari actions
 import { 
   createPaket, 
   updatePaket, 
   deletePaket,
 } from "@/app/actions/paket-actions";
-// ✅ ActionResponse di-import dari validations (sudah di-export di sana)
 import { 
   paketSchema, 
   type PaketFormData,
@@ -66,7 +64,7 @@ interface PaketFormDialogProps {
     menuPaket: string;
     kategori: string;
     hargaPaket: number;
-    foto: string | null;
+    foto: string | null; // Base64 string / Data URL dari server untuk preview
   };
   mode?: "create" | "edit";
 }
@@ -75,6 +73,11 @@ export function PaketFormDialog({ paket, mode = "create" }: PaketFormDialogProps
   const [open, setOpen] = useState(false);
   const [deleteOpen, setDeleteOpen] = useState(false);
   const [isPending, startTransition] = useTransition();
+  
+  // ✅ State tambahan dari Kode 1 untuk handle upload file & preview
+  const [previewUrl, setPreviewUrl] = useState<string | null>(paket?.foto || null);
+  const [selectedFile, setSelectedFile] = useState<File | null>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   const form = useForm<PaketFormData>({
     resolver: zodResolver(paketSchema),
@@ -83,9 +86,21 @@ export function PaketFormDialog({ paket, mode = "create" }: PaketFormDialogProps
       menu_paket: paket?.menuPaket || "",
       kategori: paket?.kategori || "Pernikahan",
       harga_paket: paket?.hargaPaket ? String(paket.hargaPaket) : "",
-      foto: paket?.foto || "",
     },
   });
+
+  // ✅ Fungsi handle perubahan file & pengecekan ukuran (Maks 2MB)
+  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file) {
+      if (file.size > 2 * 1024 * 1024) {
+        toast.error("File terlalu besar", { description: "Maksimal 2MB" });
+        return;
+      }
+      setSelectedFile(file);
+      setPreviewUrl(URL.createObjectURL(file));
+    }
+  };
 
   const formatHargaInput = (value: string) => {
     const numbers = value.replace(/\D/g, "");
@@ -93,14 +108,27 @@ export function PaketFormDialog({ paket, mode = "create" }: PaketFormDialogProps
   };
 
   async function onSubmit(values: PaketFormData) {
+    const formData = new FormData();
+    formData.append("nama_paket", values.nama_paket);
+    formData.append("menu_paket", values.menu_paket);
+    formData.append("kategori", values.kategori);
+    formData.append("harga_paket", values.harga_paket);
+
+    if (selectedFile) {
+      formData.append("foto", selectedFile);
+    }
+
     startTransition(async () => {
-      const result: ActionResponse = mode === "create" 
-        ? await createPaket(values)
-        : await updatePaket(paket!.id, values);
+      // ✅ Solusi: Tambahkan tanda kurung dan ketik 'as ActionResponse' di ujung akhir ternary
+      const result = (mode === "create" 
+        ? await createPaket(formData)
+        : await updatePaket(paket!.id, formData)) as ActionResponse;
 
       if (result.success) {
         toast.success(result.message);
         setOpen(false);
+        setPreviewUrl(null);
+        setSelectedFile(null);
         form.reset();
       } else if (result.errors) {
         const fieldErrors = result.errors as Record<string, string[]>;
@@ -250,38 +278,54 @@ export function PaketFormDialog({ paket, mode = "create" }: PaketFormDialogProps
                 )}
               />
 
-              <FormField
-                control={form.control}
-                name="foto"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>URL Foto Paket</FormLabel>
-                    <FormControl>
-                      <div className="space-y-2">
-                        <Input placeholder="https://example.com/foto-paket.jpg" {...field} />
-                        {field.value && (
-                          <div className="relative w-full h-32 rounded-lg overflow-hidden border bg-muted">
-                            <ImageIcon className="absolute inset-0 m-auto h-8 w-8 text-muted-foreground" />
-                            <Image 
-                              src={field.value} 
-                              alt="Preview"
-                              fill
-                              className="object-cover"
-                              onError={(e) => {
-                                (e.target as HTMLImageElement).style.display = "none";
-                              }}
-                            />
-                          </div>
-                        )}
+              {/* ✅ SEKSI UPLOAD FOTO (Diadopsi dari Kode 1, menggantikan URL text input biasa) */}
+              <div className="space-y-2">
+                <FormLabel>Foto Paket</FormLabel>
+                <div className="flex items-center gap-4">
+                  <div className="relative w-24 h-24 rounded-lg overflow-hidden border bg-muted shrink-0">
+                    {previewUrl ? (
+                      <Image src={previewUrl} alt="Preview" fill className="object-cover" />
+                    ) : (
+                      <div className="w-full h-full flex items-center justify-center text-muted-foreground">
+                        <ImageIcon className="h-8 w-8" />
                       </div>
-                    </FormControl>
-                    <p className="text-xs text-muted-foreground">
-                      Gunakan URL gambar dari Unsplash, Imgur, atau hosting Anda.
-                    </p>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
+                    )}
+                  </div>
+                  <div className="flex-1 space-y-2">
+                    <Input 
+                      type="file" 
+                      accept="image/*" 
+                      ref={fileInputRef} 
+                      onChange={handleFileChange} 
+                      className="hidden" 
+                    />
+                    <Button 
+                      type="button" 
+                      variant="outline" 
+                      onClick={() => fileInputRef.current?.click()} 
+                      className="w-full"
+                    >
+                      {previewUrl ? "Ganti Foto" : "Upload Foto"}
+                    </Button>
+                    {previewUrl && (
+                      <Button 
+                        type="button" 
+                        variant="ghost" 
+                        size="sm" 
+                        onClick={() => { 
+                          setPreviewUrl(null); 
+                          setSelectedFile(null); 
+                          if(fileInputRef.current) fileInputRef.current.value = ""; 
+                        }} 
+                        className="text-red-500 w-full"
+                      >
+                        <X className="h-4 w-4 mr-2" /> Hapus Foto
+                      </Button>
+                    )}
+                  </div>
+                </div>
+                <p className="text-xs text-muted-foreground">Format: JPG, PNG (Max 2MB)</p>
+              </div>
 
               <DialogFooter className="gap-2 sm:gap-0">
                 {mode === "edit" && (

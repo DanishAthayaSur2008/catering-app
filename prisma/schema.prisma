@@ -37,7 +37,7 @@ model Pelanggan {
   address2      String?  @map("alamat2")
   address3      String?  @map("alamat3")
   noTelp        String?  @map("no_telp")
-  foto          String?
+  foto          Bytes?
   createdAt     DateTime @default(now()) @map("created_at")
   updatedAt     DateTime @updatedAt @map("updated_at")
 
@@ -54,7 +54,7 @@ model Paket {
   // ✅ Kategori: 'Pernikahan' | 'Selametan' | 'Ulang Tahun' | 'Kantor' (String untuk SQLite)
   kategori     String
   hargaPaket   Float    @map("harga_paket")
-  foto         String?
+  foto         Bytes?
   // ✅ Status: 'aktif' | 'nonaktif'
   statusPaket  String   @default("aktif")
   createdAt    DateTime @default(now()) @map("created_at")
@@ -126,7 +126,7 @@ model Pengiriman {
   tanggalKirim DateTime? @map("tanggal_kirim")
   // ✅ Status Kirim: 'Belum_Dikirim' | 'Sedang_Dikirim' | 'Tiba_Ditujuan'
   statusKirim  String    @default("Belum_Dikirim") @map("status_kirim")
-  buktiFoto    String?   @map("bukti_foto")
+  buktiFoto    Bytes?   @map("bukti_foto")
   // ✅ Alamat tujuan (override jika beda dari alamat pelanggan)
   alamatTujuan String?   @map("alamat_tujuan")
   // ✅ No. resi / kode tracking
@@ -164,7 +164,7 @@ model DetailJenisPembayaran {
   idJenisPembayaran Int      @map("id_jenis_pembayaran")
   tempatPembayaran  String?  @map("tempat_pembayaran")
   noRekening        String?  @map("no_rekening")
-  logoPembayaran    String?  @map("logo_pembayaran")
+  logoPembayaran    Bytes?  @map("logo_pembayaran")
   createdAt         DateTime @default(now()) @map("created_at")
   updatedAt         DateTime @updatedAt @map("updated_at")
 

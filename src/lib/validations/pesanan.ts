@@ -12,6 +12,17 @@ export const STATUS_PESANAN = [
 
 export type StatusPesanan = typeof STATUS_PESANAN[number];
 
+// Tambahan list status pembayaran untuk validasi Zod
+export const STATUS_PEMBAYARAN = [
+  "Menunggu_Pembayaran",
+  "Menunggu_Konfirmasi_Bayar",
+  "Lunas",
+  "Gagal",
+  "Refund",
+] as const;
+
+export type StatusPembayaran = typeof STATUS_PEMBAYARAN[number];
+
 export const detailPesananSchema = z.object({
   idPaket: z.number().min(1, "Paket wajib dipilih"),
   jumlah: z.number().min(1, "Minimal 1 porsi"),
@@ -24,6 +35,11 @@ export const pesananSchema = z.object({
   statusPesanan: z.string().refine(
     (val) => STATUS_PESANAN.includes(val as StatusPesanan),
     { message: "Status tidak valid" }
+  ).optional(),
+  // Menambahkan validasi status pembayaran ke dalam skema pesanan
+  statusPembayaran: z.string().refine(
+    (val) => STATUS_PEMBAYARAN.includes(val as StatusPembayaran),
+    { message: "Status pembayaran tidak valid" }
   ).optional(),
   detailPemesanans: z.array(detailPesananSchema).min(1, "Minimal 1 item paket"),
 });

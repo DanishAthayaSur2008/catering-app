@@ -9,11 +9,10 @@ export const pelangganSchema = z.object({
   alamat2: z.string().optional(),
   alamat3: z.string().optional(),
   no_telp: z.string().min(10, "Nomor telepon tidak valid"),
-  foto: z.string().optional(),
 });
 
 export type PelangganFormData = z.infer<typeof pelangganSchema>;
 
-export type ActionResponse = 
+export type ActionResponse =
   | { success: true; message: string }
   | { success: false; message: string; errors?: Record<string, string[]> };

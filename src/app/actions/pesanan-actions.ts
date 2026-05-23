@@ -18,6 +18,7 @@ export async function createPesanan(data: PesananFormData): Promise<ActionRespon
         tanggalAcara: new Date(validated.tanggalAcara),
         totalHarga,
         statusPesanan: validated.statusPesanan || "Menunggu_Konfirmasi",
+        statusPembayaran: validated.statusPembayaran || "Menunggu_Pembayaran", // Menyimpan status pembayaran baru
         detailPemesanans: {
           create: validated.detailPemesanans.map((item: DetailPesananFormData) => ({
             idPaket: item.idPaket,
@@ -33,6 +34,7 @@ export async function createPesanan(data: PesananFormData): Promise<ActionRespon
     return { success: true, message: "Pesanan berhasil dibuat!", id: result.id };
   } catch (error) {
     if (error instanceof z.ZodError) {
+      // ✅ FIX: Mengganti titik koma (;) menjadi koma (,) agar valid sebagai properti objek JavaScript
       return { success: false, message: "Validasi gagal", errors: error.flatten().fieldErrors };
     }
     console.error("Create pesanan error:", error);
@@ -55,6 +57,7 @@ export async function updatePesanan(id: number, data: PesananFormData): Promise<
         tanggalAcara: new Date(validated.tanggalAcara),
         totalHarga,
         statusPesanan: validated.statusPesanan || "Menunggu_Konfirmasi",
+        statusPembayaran: validated.statusPembayaran || "Menunggu_Pembayaran", // Mengupdate status pembayaran baru
         detailPemesanans: {
           create: validated.detailPemesanans.map((item: DetailPesananFormData) => ({
             idPaket: item.idPaket,
@@ -66,6 +69,7 @@ export async function updatePesanan(id: number, data: PesananFormData): Promise<
     });
     
     revalidatePath("/pesanan");
+    revalidatePath("/pesanan-saya");
     return { success: true, message: "Pesanan berhasil diperbarui!" };
   } catch (error) {
     if (error instanceof z.ZodError) {

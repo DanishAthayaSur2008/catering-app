@@ -1,67 +1,70 @@
-/* eslint-disable react-hooks/incompatible-library */
+/* eslint-disable @typescript-eslint/no-explicit-any */
 // src/components/pengiriman/pengiriman-form-dialog.tsx
 "use client";
 
 import { useState, useTransition, useEffect } from "react";
 import { useForm } from "react-hook-form";
-import { zodResolver } from "@hookform/resolvers/zod";
 import { toast } from "sonner";
-import { Loader2, Plus, Pencil, Trash2, Upload, Truck, CheckCircle, Clock } from "lucide-react";
+import { Loader2, Plus, Pencil, Trash2, User, Package, MapPin } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-  DialogTrigger,
+  Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger,
 } from "@/components/ui/dialog";
 import {
-  Form,
-  FormControl,
-  FormField,
-  FormItem,
-  FormLabel,
-  FormMessage,
+  Form, FormControl, FormField, FormItem, FormLabel, FormMessage,
 } from "@/components/ui/form";
-import { Input } from "@/components/ui/input";
 import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
+  Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from "@/components/ui/select";
 import {
-  AlertDialog,
-  AlertDialogAction,
-  AlertDialogCancel,
-  AlertDialogContent,
-  AlertDialogDescription,
-  AlertDialogFooter,
-  AlertDialogHeader,
-  AlertDialogTitle,
+  AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 import { Card, CardContent } from "@/components/ui/card";
-import { Badge } from "@/components/ui/badge";
+import { DetailLogistikFields } from "./detail-logistik-fields";
 
 import {
   upsertPengiriman,
-  updateStatusPengiriman,
-  uploadBuktiFoto,
   deletePengiriman,
-  getKurirOptions,
+  getPesananBelumDikirim,
 } from "@/app/actions/pengiriman-actions";
 import {
-  pengirimanSchema,
-  type PengirimanFormData,
   type ActionResponse,
-  STATUS_KIRIM,
 } from "@/lib/validations/pengiriman";
-import { formatRupiah, formatDate, getStatusColor } from "@/lib/utils";
-import Image from "next/image";
+import { formatRupiah } from "@/lib/utils";
+
+// ✅ Daftarkan field baru ke dalam sistem tipe React Hook Form
+type PengirimanFormValues = {
+  idPesan: number;
+  kurirId: number | null; // Pastikan tipenya mendukung null jika kurir opsional
+  noResi: string;
+  alamatTujuan: string;
+  estimasiTiba: string;
+};
+
+interface PemesananOption {
+  id: number;
+  totalHarga: number;
+  tanggalAcara: Date | string;
+  statusPesanan: string;
+  pelanggan: {
+    id: number;
+    namaPelanggan: string;
+    alamat1: string | null;
+    noTelp: string | null;
+  };
+  detailPemesanans: Array<{
+    id: number;
+    jumlah: number;
+    subtotal: number;
+    paket: {
+      id: number;
+      namaPaket: string;
+      menuPaket: string | null;
+      hargaPaket: number;
+    };
+  }>;
+}
 
 interface PengirimanFormDialogProps {
   pengiriman?: {
@@ -69,103 +72,98 @@ interface PengirimanFormDialogProps {
     idPesan: number;
     statusKirim: string;
     tanggalKirim: Date | string | null;
-    buktiFoto: string | null;
+    buktiFoto: any | null;
     kurirId: number | null;
-    kurir: { id: number; name: string } | null;
-    pemesanan: {
-      id: number;
-      totalHarga: number;
-      tanggalAcara: Date | string;
-      pelanggan: { id: number; namaPelanggan: string; noTelp: string | null };
-      detailPemesanans: Array<{
-        id: number;
-        jumlah: number;
-        subtotal: number;
-        paket: { id: number; namaPaket: string; hargaPaket: number };
-      }>;
-    };
+    kurir: { id: number; name: string; email: string } | null;
+    pemesanan: PemesananOption;
+    noResi?: string | null;
+    alamatTujuan?: string | null;
+    estimasiTiba?: Date | string | null;
   };
   mode?: "create" | "edit";
-  isKurir?: boolean; // Flag untuk view kurir-only
+  kurirOptions?: Array<{ id: number; name: string; email: string }>;
 }
 
-export function PengirimanFormDialog({ pengiriman, mode = "create", isKurir = false }: PengirimanFormDialogProps) {
+export function PengirimanFormDialog({ pengiriman, mode = "create", kurirOptions = [] }: PengirimanFormDialogProps) {
   const [open, setOpen] = useState(false);
   const [deleteOpen, setDeleteOpen] = useState(false);
   const [isPending, startTransition] = useTransition();
-  const [kurirOptions, setKurirOptions] = useState<Array<{ id: number; name: string; email: string }>>([]);
+  const [pesananOptions, setPesananOptions] = useState<PemesananOption[]>([]);
+  const [selectedPesanan, setSelectedPesanan] = useState<PemesananOption | null>(null);
 
-  const form = useForm<PengirimanFormData>({
-    resolver: zodResolver(pengirimanSchema),
+  // Load daftar pesanan yang belum dikirim saat dialong terbuka (mode create)
+  useEffect(() => {
+    if (open && mode === "create") {
+      getPesananBelumDikirim().then(setPesananOptions);
+    }
+  }, [open, mode]);
+
+  // ✅ Inisialisasi Hook Form dengan struktur data yang lengkap dan aman
+  const form = useForm<PengirimanFormValues>({
     defaultValues: {
       idPesan: pengiriman?.idPesan || 0,
-      statusKirim: pengiriman?.statusKirim || "Belum_Dikirim",
-      tanggalKirim: pengiriman?.tanggalKirim ? new Date(pengiriman.tanggalKirim).toISOString().split("T")[0] : "",
-      buktiFoto: pengiriman?.buktiFoto || "",
-      kurirId: pengiriman?.kurirId || undefined,
+      kurirId: pengiriman?.kurirId || null,
+      noResi: pengiriman?.noResi || "",
+      alamatTujuan: pengiriman?.alamatTujuan || "",
+      estimasiTiba: pengiriman?.estimasiTiba
+        ? new Date(pengiriman.estimasiTiba).toISOString().split("T")[0]
+        : "",
     },
   });
 
-  // Load kurir options when dialog opens (only for admin/owner)
+  // Sinkronisasi data form kembali jika props pengiriman berubah (Mode Edit)
   useEffect(() => {
-    if (open && !isKurir) {
-      getKurirOptions().then(setKurirOptions);
+    if (pengiriman && mode === "edit") {
+      form.reset({
+        idPesan: pengiriman.idPesan,
+        kurirId: pengiriman.kurirId,
+        noResi: pengiriman.noResi || "",
+        alamatTujuan: pengiriman.alamatTujuan || "",
+        estimasiTiba: pengiriman.estimasiTiba
+          ? new Date(pengiriman.estimasiTiba).toISOString().split("T")[0]
+          : "",
+      });
     }
-  }, [open, isKurir]);
+  }, [pengiriman, mode, form]);
 
-  async function onSubmit(values: PengirimanFormData) {
+  const handlePesananChange = (idPesan: string) => {
+    const id = Number(idPesan);
+    const pesanan = pesananOptions.find(p => p.id === id) || null;
+    setSelectedPesanan(pesanan);
+    form.setValue("idPesan", id);
+  };
+
+  // ✅ Submit handler tunggal yang mengirimkan data kurir beserta resi secara utuh ke Server Action
+  async function onSubmit(values: PengirimanFormValues) {
     startTransition(async () => {
-      const result: ActionResponse = await upsertPengiriman(values);
+      const payload = {
+        id: pengiriman?.id, // Kirimkan ID jika dalam mode edit agar Prisma melakukan update
+        idPesan: values.idPesan,
+        kurirId: values.kurirId ? Number(values.kurirId) : null, // 👈 FORCE KONVERSI KE NUMBER / NULL
+        statusKirim: (pengiriman?.statusKirim || "Belum_Dikirim") as any,
+        noResi: values.noResi || null,
+        alamatTujuan: values.alamatTujuan || null,
+        estimasiTiba: values.estimasiTiba ? new Date(values.estimasiTiba) : null,
+      };
+
+      const result: ActionResponse = await upsertPengiriman(payload as any);
 
       if (result.success) {
-        toast.success(result.message);
+        toast.success(result.message || "Data pengiriman berhasil disimpan!");
         setOpen(false);
-        form.reset();
+        if (mode === "create") {
+          form.reset();
+          setSelectedPesanan(null);
+        }
       } else if (result.errors) {
         const fieldErrors = result.errors as Record<string, string[]>;
         Object.entries(fieldErrors).forEach(([field, messages]) => {
           messages?.forEach((msg: string) => {
-            form.setError(field as keyof PengirimanFormData, { message: msg });
+            form.setError(field as keyof PengirimanFormValues, { message: msg });
           });
         });
       } else {
-        toast.error(result.message || "Terjadi kesalahan");
-      }
-    });
-  }
-
-  // Quick status update for kurir
-  async function handleQuickStatusUpdate(newStatus: string) {
-    if (!pengiriman) return;
-
-    startTransition(async () => {
-      const result = await updateStatusPengiriman(pengiriman.id, newStatus);
-
-      if (result.success) {
-        toast.success(result.message);
-        // Refresh form state
-        form.setValue("statusKirim", newStatus);
-        if (newStatus === "Tiba_Ditujuan") {
-          form.setValue("tanggalKirim", new Date().toISOString().split("T")[0]);
-        }
-      } else {
-        toast.error(result.message);
-      }
-    });
-  }
-
-  // Upload bukti foto
-  async function handleUploadBukti(fotoUrl: string) {
-    if (!pengiriman) return;
-
-    startTransition(async () => {
-      const result = await uploadBuktiFoto(pengiriman.id, fotoUrl);
-
-      if (result.success) {
-        toast.success(result.message);
-        form.setValue("buktiFoto", fotoUrl);
-      } else {
-        toast.error(result.message);
+        toast.error(result.message || "Terjadi kesalahan proses penyimpanan data");
       }
     });
   }
@@ -175,7 +173,6 @@ export function PengirimanFormDialog({ pengiriman, mode = "create", isKurir = fa
 
     startTransition(async () => {
       const result = await deletePengiriman(pengiriman.id);
-
       if (result.success) {
         toast.success(result.message);
         setDeleteOpen(false);
@@ -186,24 +183,7 @@ export function PengirimanFormDialog({ pengiriman, mode = "create", isKurir = fa
     });
   }
 
-  // Status badge config
-  const statusConfig: Record<string, { label: string; icon: React.ReactNode; color: string }> = {
-    "Belum_Dikirim": {
-      label: "Belum Dikirim",
-      icon: <Clock className="h-4 w-4 text-gray-500" />,
-      color: "bg-gray-100 text-gray-800"
-    },
-    "Sedang_Dikirim": {
-      label: "Sedang Dikirim",
-      icon: <Truck className="h-4 w-4 text-blue-500" />,
-      color: "bg-blue-100 text-blue-800"
-    },
-    "Tiba_Ditujuan": {
-      label: "Tiba Ditujuan",
-      icon: <CheckCircle className="h-4 w-4 text-green-500" />,
-      color: "bg-green-100 text-green-800"
-    },
-  };
+  const displayPesanan = mode === "edit" ? pengiriman?.pemesanan : selectedPesanan;
 
   return (
     <>
@@ -221,134 +201,109 @@ export function PengirimanFormDialog({ pengiriman, mode = "create", isKurir = fa
           )}
         </DialogTrigger>
 
-        <DialogContent className="sm:max-w-175 max-h-[90vh] overflow-y-auto">
+        <DialogContent className="sm:max-w-2xl max-h-[90vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle>
-              {mode === "create" ? "Atur Pengiriman Baru" : "Update Pengiriman"}
+              {mode === "create" ? "Pekerjakan Kurir" : "Update Assign & Detail Pengiriman"}
             </DialogTitle>
             <DialogDescription>
               {mode === "create"
-                ? "Assign kurir dan atur status pengiriman."
-                : "Perbarui status dan upload bukti pengiriman."}
+                ? "Pilih pesanan yang perlu dikirim, tentukan kurir dan lengkapi detail pengiriman."
+                : "Perbarui informasi tugas kurir serta resi pelacakan pesanan ini."}
             </DialogDescription>
           </DialogHeader>
 
-          {/* Order Summary Card */}
-          {pengiriman?.pemesanan && (
-            <Card className="bg-muted/50">
-              <CardContent className="p-4 space-y-2">
-                <div className="flex justify-between items-start">
-                  <div>
-                    <p className="font-semibold">Pesanan #{pengiriman.pemesanan.id}</p>
-                    <p className="text-sm text-muted-foreground">
-                      {pengiriman.pemesanan.pelanggan.namaPelanggan}
-                    </p>
+          {displayPesanan && (
+            <div className="space-y-4 mb-4">
+              {/* Customer Info */}
+              <Card className="bg-muted/30">
+                <CardContent className="p-4">
+                  <div className="flex items-start gap-3">
+                    <div className="p-2 bg-slate-100 rounded-lg">
+                      <User className="h-5 w-5 text-slate-600" />
+                    </div>
+                    <div className="flex-1">
+                      <p className="font-semibold text-slate-900">{displayPesanan.pelanggan.namaPelanggan}</p>
+                      <p className="text-sm text-muted-foreground">{displayPesanan.pelanggan.noTelp}</p>
+                      <div className="flex items-start gap-1 mt-1 text-sm text-muted-foreground">
+                        <MapPin className="h-4 w-4 mt-0.5 shrink-0" />
+                        <span>{displayPesanan.pelanggan.alamat1}</span>
+                      </div>
+                    </div>
                   </div>
-                  <Badge className={getStatusColor(pengiriman.statusKirim)}>
-                    {statusConfig[pengiriman.statusKirim]?.label || pengiriman.statusKirim}
-                  </Badge>
-                </div>
-                <div className="text-sm space-y-1">
-                  <p>📅 Tanggal Acara: {formatDate(pengiriman.pemesanan.tanggalAcara)}</p>
-                  <p>📦 {pengiriman.pemesanan.detailPemesanans.length} item</p>
-                  <p className="font-semibold text-primary">
-                    Total: {formatRupiah(pengiriman.pemesanan.totalHarga)}
-                  </p>
-                </div>
-              </CardContent>
-            </Card>
+                </CardContent>
+              </Card>
+
+              {/* Package List */}
+              <Card className="bg-muted/30">
+                <CardContent className="p-4">
+                  <div className="flex items-start gap-3">
+                    <div className="p-2 bg-slate-100 rounded-lg">
+                      <Package className="h-5 w-5 text-slate-600" />
+                    </div>
+                    <div className="flex-1 space-y-2">
+                      <p className="font-semibold text-slate-900">Paket yang Dikirim</p>
+                      {displayPesanan.detailPemesanans?.map((d) => (
+                        <div key={d.id} className="flex justify-between items-center text-sm">
+                          <div>
+                            <p className="font-medium">{d.paket?.namaPaket}</p>
+                            <p className="text-xs text-muted-foreground line-clamp-1">{d.paket?.menuPaket}</p>
+                          </div>
+                          <div className="text-right">
+                            <p className="font-medium">×{d.jumlah}</p>
+                            <p className="text-xs text-muted-foreground">{formatRupiah(d.subtotal)}</p>
+                          </div>
+                        </div>
+                      ))}
+                      <div className="pt-2 border-t flex justify-between font-semibold">
+                        <span>Total</span>
+                        <span className="text-primary">{formatRupiah(displayPesanan.totalHarga)}</span>
+                      </div>
+                    </div>
+                  </div>
+                </CardContent>
+              </Card>
+            </div>
           )}
 
           <Form {...form}>
             <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
 
-              {/* Status Pengiriman */}
-              <FormField
-                control={form.control}
-                name="statusKirim"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Status Pengiriman *</FormLabel>
-                    <Select onValueChange={field.onChange} defaultValue={field.value}>
-                      <FormControl>
-                        <SelectTrigger>
-                          <SelectValue placeholder="Pilih status" />
-                        </SelectTrigger>
-                      </FormControl>
-                      <SelectContent>
-                        {STATUS_KIRIM.map((status) => (
-                          <SelectItem key={status} value={status}>
-                            <div className="flex items-center gap-2">
-                              {statusConfig[status]?.icon}
-                              {statusConfig[status]?.label || status.replace(/_/g, " ")}
-                            </div>
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-
-              {/* Quick Status Buttons for Kurir */}
-              {isKurir && (
-                <div className="flex gap-2">
-                  {STATUS_KIRIM.map((status) => (
-                    <Button
-                      key={status}
-                      type="button"
-                      variant={form.watch("statusKirim") === status ? "default" : "outline"}
-                      size="sm"
-                      onClick={() => handleQuickStatusUpdate(status)}
-                      disabled={isPending}
-                      className="flex-1"
-                    >
-                      {statusConfig[status]?.icon}
-                      <span className="ml-1 text-xs">{statusConfig[status]?.label}</span>
-                    </Button>
-                  ))}
-                </div>
-              )}
-
-              {/* Tanggal Kirim */}
-              <FormField
-                control={form.control}
-                name="tanggalKirim"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Tanggal Pengiriman</FormLabel>
-                    <FormControl>
-                      <Input type="date" {...field} />
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-
-              {/* Assign Kurir (only for admin/owner) */}
-              {!isKurir && (
+              {mode === "create" && (
                 <FormField
                   control={form.control}
-                  name="kurirId"
+                  name="idPesan"
                   render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>Assign Kurir</FormLabel>
+                    <FormItem className="mb-4">
+                      <FormLabel>Pilih Pesanan untuk Dikirim *</FormLabel>
                       <Select
-                        onValueChange={(val) => field.onChange(val ? Number(val) : undefined)}
-                        defaultValue={field.value?.toString()}
+                        onValueChange={(val) => {
+                          field.onChange(Number(val));
+                          handlePesananChange(val);
+                        }}
+                        value={field.value ? String(field.value) : undefined}
                       >
                         <FormControl>
                           <SelectTrigger>
-                            <SelectValue placeholder="Pilih kurir" />
+                            <SelectValue placeholder="Pilih pesanan..." />
                           </SelectTrigger>
                         </FormControl>
-                        <SelectContent>
-                          {kurirOptions.map((k) => (
-                            <SelectItem key={k.id} value={String(k.id)}>
-                              {k.name} ({k.email})
+                        <SelectContent className="max-h-60">
+                          {pesananOptions.map((p) => (
+                            <SelectItem key={p.id} value={String(p.id)}>
+                              <div className="flex flex-col">
+                                <span className="font-medium">#{p.id} - {p.pelanggan.namaPelanggan}</span>
+                                <span className="text-xs text-muted-foreground">
+                                  📅 {new Date(p.tanggalAcara).toLocaleDateString("id-ID")} • 💰 {formatRupiah(p.totalHarga)}
+                                </span>
+                              </div>
                             </SelectItem>
                           ))}
+                          {pesananOptions.length === 0 && (
+                            <div className="p-2 text-sm text-muted-foreground text-center">
+                              Tidak ada pesanan yang perlu dikirim.
+                            </div>
+                          )}
                         </SelectContent>
                       </Select>
                       <FormMessage />
@@ -357,56 +312,54 @@ export function PengirimanFormDialog({ pengiriman, mode = "create", isKurir = fa
                 />
               )}
 
-              {/* Upload Bukti Foto */}
+              {/* ✅ Dropdown Pilih Kurir - Perbaikan sinkronisasi variabel */}
               <FormField
                 control={form.control}
-                name="buktiFoto"
+                name="kurirId"
                 render={({ field }) => (
                   <FormItem>
-                    <FormLabel>URL Bukti Foto</FormLabel>
-                    <FormControl>
-                      <div className="space-y-2">
-                        <div className="flex gap-2">
-                          <Input
-                            placeholder="https://example.com/bukti.jpg"
-                            {...field}
-                            className="flex-1"
-                          />
-                          <Button
-                            type="button"
-                            variant="secondary"
-                            size="sm"
-                            onClick={() => field.value && handleUploadBukti(field.value)}
-                            disabled={!field.value || isPending}
-                          >
-                            <Upload className="h-4 w-4" />
-                          </Button>
-                        </div>
-                        {field.value && (
-                          <div className="relative w-full h-40 rounded-lg overflow-hidden border bg-muted">
-                            <Image
-                              src={field.value}
-                              alt="Bukti Pengiriman"
-                              fill
-                              className="object-cover"
-                              onError={(e) => {
-                                (e.target as HTMLImageElement).style.display = "none";
-                              }}
-                            />
+                    <FormLabel>Pilih Kurir untuk Dipekerjakan</FormLabel>
+                    <Select
+                      onValueChange={(val) => {
+                        // Jika memilih "null" (Kosongkan), set ke null. Jika ada isinya, paksa ke Number.
+                        field.onChange(val === "null" || !val ? null : Number(val));
+                      }}
+                      // Pastikan value default adalah "null" jika kurirId bernilai null atau kosong
+                      value={field.value ? String(field.value) : "null"}
+                    >
+                      <FormControl>
+                        <SelectTrigger>
+                          <SelectValue placeholder="Pilih kurir..." />
+                        </SelectTrigger>
+                      </FormControl>
+                      <SelectContent>
+                        <SelectItem value="null" className="text-muted-foreground italic">
+                          Belum Ditugaskan (Kosongkan)
+                        </SelectItem>
+                        {kurirOptions && kurirOptions.length > 0 ? (
+                          kurirOptions.map((k) => (
+                            <SelectItem key={k.id} value={String(k.id)}>
+                              {k.name} ({k.email})
+                            </SelectItem>
+                          ))
+                        ) : (
+                          <div className="p-2 text-xs text-center text-muted-foreground">
+                            Tidak ada data kurir yang tersedia.
                           </div>
                         )}
-                      </div>
-                    </FormControl>
-                    <p className="text-xs text-muted-foreground">
-                      Upload foto ke Imgur/Cloudinary, lalu paste URL-nya di sini.
-                    </p>
+                      </SelectContent>
+                    </Select>
                     <FormMessage />
                   </FormItem>
                 )}
               />
 
-              <DialogFooter className="gap-2 sm:gap-0">
-                {mode === "edit" && !isKurir && (
+              {/* ✅ SECTION: DETAIL PENGIRIMAN AMAN DARI ERROR PASSED TO PROPS */}
+              <DetailLogistikFields form={form} />
+
+              {/* ✅ Footer Aksi Utama */}
+              <DialogFooter className="gap-2 sm:gap-0 pt-2">
+                {mode === "edit" && (
                   <Button
                     type="button"
                     variant="destructive"
@@ -415,36 +368,38 @@ export function PengirimanFormDialog({ pengiriman, mode = "create", isKurir = fa
                     className="sm:mr-auto"
                   >
                     <Trash2 className="mr-2 h-4 w-4" />
-                    Hapus
+                    Hapus Tugas
                   </Button>
                 )}
 
                 <Button type="button" variant="outline" onClick={() => setOpen(false)}>
                   Batal
                 </Button>
-                {!isKurir && (
-                  <Button type="submit" disabled={isPending}>
-                    {isPending ? (
-                      <>
-                        <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                        Menyimpan...
-                      </>
-                    ) : mode === "create" ? "Simpan" : "Perbarui"}
-                  </Button>
-                )}
+                <Button
+                  type="submit"
+                  disabled={isPending || !displayPesanan}
+                  className="bg-blue-600 hover:bg-blue-700 text-white"
+                >
+                  {isPending ? (
+                    <>
+                      <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                      Menyimpan...
+                    </>
+                  ) : mode === "create" ? "Pekerjakan" : "Simpan Perubahan"}
+                </Button>
               </DialogFooter>
             </form>
           </Form>
         </DialogContent>
       </Dialog>
 
-      {/* Delete Confirmation */}
+      {/* dialog delete konfirmasi */}
       <AlertDialog open={deleteOpen} onOpenChange={setDeleteOpen}>
         <AlertDialogContent>
           <AlertDialogHeader>
             <AlertDialogTitle>Hapus Data Pengiriman?</AlertDialogTitle>
             <AlertDialogDescription>
-              Tindakan ini tidak dapat dibatalkan. Data pengiriman untuk pesanan #{pengiriman?.idPesan} akan dihapus.
+              Tindakan ini tidak dapat dibatalkan. Hubungan tugas kurir untuk pesanan #{pengiriman?.idPesan} akan dihapus secara permanen.
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>

@@ -60,3 +60,21 @@ export function getStatusPembayaranColor(status: string) {
     default: return "text-yellow-600 border-yellow-600";
   }
 }
+
+export function getStatusKirimColor(status: string): string {
+  const colors: Record<string, string> = {
+    'Belum_Dikirim': 'bg-gray-100 text-gray-800',
+    'Sedang_Dikirim': 'bg-blue-100 text-blue-800',
+    'Tiba_Ditujuan': 'bg-green-100 text-green-800',
+  };
+  return colors[status] || 'bg-gray-100 text-gray-800';
+}
+
+// src/lib/utils.ts
+
+// ✅ Pindahkan fungsi ini ke sini
+export function generateNoResi(): string {
+  const timestamp = Date.now().toString(36).toUpperCase();
+  const random = Math.random().toString(36).substring(2, 6).toUpperCase();
+  return `RESI-${timestamp}-${random}`;
+}

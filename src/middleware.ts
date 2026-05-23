@@ -5,74 +5,86 @@ import type { NextRequest } from "next/server";
 
 export default async function middleware(request: NextRequest) {
   const session = await auth();
-  const pathname = request.nextUrl.pathname;
+  const { pathname } = request.nextUrl;
 
-  // 🔓 Public routes (tidak butuh login)
-  const publicRoutes = ["/", "/auth/login", "/auth/register", "/api/auth"];
-  if (publicRoutes.some((route) => pathname.startsWith(route))) {
+  // 🛑 Skip middleware untuk API/internal routes
+  if (
+    pathname.startsWith("/api") || 
+    pathname.startsWith("/_next") || 
+    pathname.includes(".")
+  ) {
     return NextResponse.next();
   }
 
-  // 🔐 Protected routes: wajib login
-  if (!session?.user) {
-    return NextResponse.redirect(new URL("/auth/login", request.url));
-  }
+  // 🔓 Public routes (no login required)
+  const isLandingPage = pathname === "/";
+  const isAuthPage = pathname.startsWith("/auth");
+  const isPublicRoute = isLandingPage || isAuthPage;
 
-  const userLevel = session.user.level;
+  // 🔄 Jika sudah login
+  if (session?.user) {
+    const userLevel = session.user.level?.toLowerCase();
 
-  // 🚫 STRICT BLOCK: Admin-only routes (PELANGGAN TIDAK BOLEH AKSES)
-  const adminOnlyRoutes = ["/dashboard", "/laporan", "/pelanggan", "/pesanan"]; // ✅ Tambah '/pesanan' di sini!
-  if (adminOnlyRoutes.some((route) => pathname.startsWith(route))) {
-    if (userLevel !== "admin" && userLevel !== "owner") {
-      // Pelanggan → redirect ke /pesan | Kurir → redirect ke /pengiriman
-      const fallbackUrl = userLevel === "pelanggan" ? "/pesan" : "/pengiriman";
-      return NextResponse.redirect(new URL(fallbackUrl, request.url));
-    }
-  }
-
-  // ✅ ROLE: Pelanggan (Customer) - Hanya boleh akses route customer
-  if (userLevel === "pelanggan") {
-    const allowedRoutes = [
-      "/pesan",
-      "/pesanan-saya",
-      "/profil", 
-      "/pembayaran",
-      "/tracking",
-      "/paket", // ✅ Tambah /paket agar bisa browse
-    ];
-    const isAllowed = allowedRoutes.some((route) => pathname.startsWith(route));
-    if (!isAllowed) {
-      return NextResponse.redirect(new URL("/pesan", request.url));
-    }
-  }
-
-  // ✅ ROLE: Kurir
-  if (userLevel === "kurir" || userLevel === "kuri") {
-    const allowedRoutes = ["/pengiriman"];
-    const isAllowed = allowedRoutes.some((route) => pathname.startsWith(route));
-    if (!isAllowed) {
-      return NextResponse.redirect(new URL("/pengiriman", request.url));
-    }
-  }
-
-  // ✅ ROLE: Admin & Owner
-  if (userLevel === "admin" || userLevel === "owner") {
-    // Redirect admin yang nyasar ke route customer
-    if (pathname.startsWith("/pesanan-saya") || pathname.startsWith("/pesan")) {
-      return NextResponse.redirect(new URL("/dashboard", request.url));
+    // Redirect jika login tapi nekat akses halaman auth (/auth/login atau /auth/register)
+    if (isAuthPage) {
+      if (userLevel === "kurir" || userLevel === "kuri") {
+        return NextResponse.redirect(new URL("/kurir", request.url));
+      }
+      if (userLevel === "admin" || userLevel === "owner") {
+        return NextResponse.redirect(new URL("/dashboard", request.url));
+      }
+      // Pelanggan diarahkan utama ke /menu
+      return NextResponse.redirect(new URL("/menu", request.url));
     }
 
-    const allowedRoutes = [
-      "/dashboard",
-      "/pelanggan",
-      "/paket",
-      "/pesanan",
-      "/pengiriman",
-      "/laporan",
-    ];
-    const isAllowed = allowedRoutes.some((route) => pathname.startsWith(route));
-    if (!isAllowed) {
-      return NextResponse.redirect(new URL("/dashboard", request.url));
+    // Jika pelanggan mengakses root landing page ("/") setelah login, lempar juga ke /menu
+    if (isLandingPage && userLevel === "pelanggan") {
+      return NextResponse.redirect(new URL("/menu", request.url));
+    }
+
+    // 🛡️ Role-based access control
+    if (userLevel === "kurir" || userLevel === "kuri") {
+      const allowedPaths = ["/kurir", "/profil"];
+      const isAllowed = allowedPaths.some((path) => 
+        pathname === path || pathname.startsWith(`${path}/`)
+      );
+      if (!isAllowed && !isLandingPage) {
+        return NextResponse.redirect(new URL("/kurir", request.url));
+      }
+    }
+
+    if (userLevel === "pelanggan") {
+      const allowedPaths = [
+        "/menu", "/pesan", "/pesanan-saya", "/profil", 
+        "/pembayaran", "/tracking"
+      ];
+      const isAllowed = allowedPaths.some((path) => 
+        pathname === path || pathname.startsWith(`${path}/`)
+      );
+      // Jika mencoba akses route ilegal, otomatis amankan balik ke /menu
+      if (!isAllowed) {
+        return NextResponse.redirect(new URL("/menu", request.url));
+      }
+    }
+
+    if (userLevel === "admin" || userLevel === "owner") {
+      // Admin TIDAK boleh akses route customer
+      const forbiddenPaths = ["/pesan", "/pesanan-saya", "/menu"]; 
+      const isForbidden = forbiddenPaths.some((path) => 
+        pathname === path || pathname.startsWith(`${path}/`)
+      );
+      if (isForbidden) {
+        return NextResponse.redirect(new URL("/dashboard", request.url));
+      }
+    }
+  } 
+  // 🔐 Jika belum login
+  else {
+    if (!isPublicRoute) {
+      const loginUrl = new URL("/auth/login", request.url);
+      const response = NextResponse.redirect(loginUrl);
+      response.headers.set("Cache-Control", "no-store, max-age=0, must-revalidate");
+      return response;
     }
   }
 
@@ -80,5 +92,7 @@ export default async function middleware(request: NextRequest) {
 }
 
 export const config = {
-  matcher: ["/((?!_next/static|_next/image|favicon.ico|.*\\..*).*)"],
+  matcher: [
+    "/((?!_next/static|_next/image|favicon.ico|.*\\.(?:svg|png|jpg|jpeg|gif|webp)$).*)",
+  ],
 };

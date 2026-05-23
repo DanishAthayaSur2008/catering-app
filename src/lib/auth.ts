@@ -61,15 +61,14 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
   callbacks: {
     async jwt({ token, user }) {
       if (user) {
-        // Simpan data ke token saat login pertama kali
         token.id = user.id as string;
-        token.level = (user as { level: string }).level;
+        // Normalisasi level ke lowercase agar pengecekan middleware stabil
+        token.level = (user as { level: string }).level.toLowerCase();
       }
       return token;
     },
     async session({ session, token }) {
       if (session.user) {
-        // ✅ Perbaikan: Paksa (cast) unknown menjadi string
         session.user.id = token.id as string;
         session.user.level = token.level as string;
       }
