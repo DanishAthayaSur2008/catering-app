@@ -6,6 +6,7 @@ import { prisma } from "@/lib/prisma";
 import bcrypt from "bcryptjs";
 import { signOut } from "@/lib/auth"; // ✅ Import signOut dari auth config lo
 
+// ✅ REGISTRASI PELANGGAN
 export async function registerPelanggan(formData: FormData): Promise<{ success: boolean; message: string }> {
   try {
     const validated = z.object({
@@ -54,6 +55,54 @@ export async function registerPelanggan(formData: FormData): Promise<{ success: 
     return { success: false, message: "Terjadi kesalahan server" };
   }
 }
+
+// ✅ RESET PASSWORD TANPA EMAIL (Verifikasi via Email & No Telepon Pelanggan)
+export async function resetPasswordTanpaEmail(formData: FormData): Promise<{ success: boolean; message: string }> {
+  const email = formData.get("email")?.toString().trim();
+  const noTelp = formData.get("noTelp")?.toString().trim();
+  const passwordBaru = formData.get("passwordBaru")?.toString();
+
+  if (!email || !noTelp || !passwordBaru) {
+    return { success: false, message: "Semua kolom wajib diisi!" };
+  }
+
+  if (passwordBaru.length < 6) {
+    return { success: false, message: "Password baru minimal 6 karakter!" };
+  }
+
+  try {
+    // 1. Cari data pelanggan berdasarkan email
+    const pelanggan = await prisma.pelanggan.findUnique({
+      where: { email }
+    });
+
+    // 2. Jika pelanggan tidak ditemukan, beri pesan ambigu demi keamanan (Security Best Practice)
+    if (!pelanggan) {
+      return { success: false, message: "Email atau Nomor Telepon tidak cocok!" };
+    }
+
+    // 3. Validasi kecocokan nomor telepon yang terdaftar di database
+    if (pelanggan.noTelp !== noTelp) {
+      return { success: false, message: "Email atau Nomor Telepon tidak cocok!" };
+    }
+
+    // 4. Enkripsi Password Baru
+    const hashedPassword = await bcrypt.hash(passwordBaru, 10);
+
+    // 5. Update password baru ke dalam database pelanggan
+    await prisma.pelanggan.update({
+      where: { id: pelanggan.id },
+      data: { password: hashedPassword }
+    });
+
+    return { success: true, message: "Password berhasil diperbarui! Silakan masuk." };
+
+  } catch (error) {
+    console.error("Reset Password Error:", error);
+    return { success: false, message: "Terjadi kesalahan server" };
+  }
+}
+
 // ✅ LOGOUT ACTION
 export async function logout(): Promise<void> {
   // Tambahkan redirectTo untuk memastikan tidak ada salah arah saat signout

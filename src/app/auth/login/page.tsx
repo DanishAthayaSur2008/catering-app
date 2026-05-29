@@ -37,7 +37,7 @@ export default async function LoginPage() {
             <UtensilsCrossed className="h-6 w-6 text-white" />
           </div>
           <span className="text-2xl font-black tracking-tighter italic text-white">
-            Catering<span className="text-orange-500">Ku.</span>
+            Catering<span className="text-orange-500">Pro.</span>
           </span>
         </Link>
 
@@ -77,7 +77,7 @@ export default async function LoginPage() {
                 <div className="bg-orange-500 p-1.5 rounded-lg">
                     <UtensilsCrossed className="h-4 w-4 text-white" />
                 </div>
-                <span className="font-black italic text-slate-900">Catering<span className="text-orange-500">Ku.</span></span>
+                <span className="font-black italic text-slate-900">Catering<span className="text-orange-500">Pro.</span></span>
             </Link>
         </div>
 

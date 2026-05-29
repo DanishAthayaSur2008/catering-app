@@ -140,7 +140,7 @@ export async function upsertPengiriman(data: PengirimanFormValues): Promise<Acti
 // ✅ UPLOAD BUKTI FOTO (Kurir)
 export async function uploadBuktiFoto(formData: FormData): Promise<ActionResponse> {
   const session = await auth();
-  if (session?.user?.level !== "kurir") {
+  if (session?.user?.level !== "kuri")  {
     return { success: false, message: "Akses ditolak" };
   }
 

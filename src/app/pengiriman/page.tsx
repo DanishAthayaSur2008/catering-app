@@ -81,6 +81,7 @@ export default async function PengirimanPage({ searchParams }: PengirimanPagePro
 
   return (
     <div className="flex h-screen overflow-hidden bg-slate-50/50 dark:bg-slate-950">
+
       <Sidebar userRole={userRole} currentPath="/pengiriman" />
 
       <div className="flex flex-1 flex-col overflow-hidden">
@@ -224,8 +225,7 @@ export default async function PengirimanPage({ searchParams }: PengirimanPagePro
                                   await approvePengirimanSelesai(pengiriman.id);
                                 }}>
                                   <Button type="submit" size="sm" variant="default" className="bg-emerald-600 hover:bg-emerald-700">
-                                    <CheckCircle className="h-4 w-4 mr-1" />
-                                    Approve
+                                    <CheckCircle className="h-4 w-4 mr-1" /> Approve
                                   </Button>
                                 </form>
                               )}

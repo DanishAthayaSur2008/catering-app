@@ -64,7 +64,7 @@ export default function RegisterPage() {
             <UtensilsCrossed className="h-6 w-6" />
           </div>
           <span className="text-2xl font-black tracking-tighter italic">
-            Catering<span className="text-orange-500">Ku.</span>
+            Catering<span className="text-orange-500">Pro.</span>
           </span>
         </Link>
 

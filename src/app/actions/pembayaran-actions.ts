@@ -23,14 +23,14 @@ export async function createPembayaran(
 
   try {
     const customerId = Number(session.user.id);
-    
+
     // ✅ PERBAIKAN 1: Hapus 'include: { pembayaran: true }' karena field pembayaran ada di dalam model Pemesanan
     const pesanan = await prisma.pemesanan.findFirst({
       where: { id: data.idPemesanan, idPelanggan: customerId },
     });
 
     if (!pesanan) return { success: false, message: "Pesanan tidak ditemukan" };
-    
+
     // ✅ PERBAIKAN 2: Validasi status berdasarkan field langsung di model Pemesanan
     if (pesanan.statusPembayaran !== "Menunggu_Pembayaran") {
       return { success: false, message: "Pembayaran sudah diproses atau selesai untuk pesanan ini" };
@@ -52,8 +52,8 @@ export async function createPembayaran(
 
     // ✅ Tentukan status pembayaran berdasarkan metode (Menggunakan string literal sesuai skema SQLite Anda)
     const isCOD = paymentMethod.namaPembayaran.toUpperCase().includes("COD");
-    const statusPembayaran = isCOD 
-      ? "Lunas" 
+    const statusPembayaran = isCOD
+      ? "Lunas"
       : "Menunggu_Konfirmasi_Bayar";
 
     // ✅ PERBAIKAN 3: Gunakan 'prisma.pemesanan.update', bukan 'prisma.pembayaran.create'
@@ -72,11 +72,11 @@ export async function createPembayaran(
     });
 
     revalidatePath("/pesanan-saya");
-    return { 
-      success: true, 
-      message: isCOD 
-        ? "Pesanan diproses dengan metode COD!" 
-        : "Bukti pembayaran sedang diverifikasi admin!" 
+    return {
+      success: true,
+      message: isCOD
+        ? "Pesanan diproses dengan metode COD!"
+        : "Bukti pembayaran sedang diverifikasi admin!"
     };
   } catch (error) {
     console.error("❌ Create pembayaran error:", error);
@@ -86,21 +86,47 @@ export async function createPembayaran(
 
 // ✅ GET PAYMENT METHODS (Untuk dropdown di form)
 export async function getPaymentMethods() {
-  return prisma.jenisPembayaran.findMany({
-    include: {
-      detailJenisPembayarans: {
-        select: {
-          id: true,
-          tempatPembayaran: true,
-          noRekening: true,
-          logoPembayaran: true,
+  try {
+    const paymentMethods = await prisma.jenisPembayaran.findMany({
+      include: {
+        detailJenisPembayarans: {
+          select: {
+            id: true,
+            tempatPembayaran: true,
+            noRekening: true,
+            logoPembayaran: true,
+          }
         }
-      }
-    },
-    orderBy: { namaPembayaran: "asc" }
-  });
-}
+      },
+      orderBy: { namaPembayaran: "asc" }
+    });
 
+    // ✨ Sinkronisasi aman tanpa menggunakan 'as any' (Lolos ESLint)
+    return paymentMethods.map((jenis) => ({
+      ...jenis,
+      detailJenisPembayarans: jenis.detailJenisPembayarans.map((djp) => {
+        let logoBase64: string | null = null;
+
+        if (djp.logoPembayaran) {
+          if (typeof djp.logoPembayaran === "string") {
+            logoBase64 = djp.logoPembayaran;
+          } else {
+            // Gunakan type cast 'as Buffer' agar lolos dari aturan strict ESLint
+            logoBase64 = `data:image/png;base64,${Buffer.from(djp.logoPembayaran as Buffer).toString("base64")}`;
+          }
+        }
+
+        return {
+          ...djp,
+          logoPembayaran: logoBase64,
+        };
+      }),
+    }));
+  } catch (error) {
+    console.error("Error fetching payment methods:", error);
+    return [];
+  }
+}
 // Tambah function ini di file yang sama:
 
 // ✅ GET PAYMENT METHODS UNTUK CUSTOMER FORM

@@ -4,10 +4,21 @@ import { NextResponse } from "next/server";
 import type { NextRequest } from "next/server";
 
 export default async function middleware(request: NextRequest) {
-  const session = await auth();
   const { pathname } = request.nextUrl;
 
-  // 🛑 Skip middleware untuk API/internal routes
+  // 🛑 1. PERBAIKAN UTAMA: Langsung skip middleware untuk internal data Auth.js
+  if (pathname.startsWith("/api/auth")) {
+    return NextResponse.next();
+  }
+
+  // 🛑 2. PERBAIKAN UTAMA: Deteksi header Server Action Next.js
+  // Jika ini request Server Action, jangan jalankan logika redirect middleware agar tidak merusak JSON stream
+  const isServerAction = request.headers.has("next-action");
+  if (isServerAction) {
+    return NextResponse.next();
+  }
+
+  // 🛑 Skip middleware untuk API/internal routes standar lainnya
   if (
     pathname.startsWith("/api") || 
     pathname.startsWith("/_next") || 
@@ -15,6 +26,9 @@ export default async function middleware(request: NextRequest) {
   ) {
     return NextResponse.next();
   }
+
+  // Jalankan auth() hanya untuk request navigasi halaman murni
+  const session = await auth();
 
   // 🔓 Public routes (no login required)
   const isLandingPage = pathname === "/";
@@ -42,7 +56,7 @@ export default async function middleware(request: NextRequest) {
       return NextResponse.redirect(new URL("/menu", request.url));
     }
 
-    // 🛡️ Role-based access control
+    // 🛡️ Role-based access control (RBAC)
     if (userLevel === "kurir" || userLevel === "kuri") {
       const allowedPaths = ["/kurir", "/profil"];
       const isAllowed = allowedPaths.some((path) => 

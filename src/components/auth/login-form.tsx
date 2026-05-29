@@ -1,14 +1,14 @@
 // src/components/auth/login-form.tsx
 "use client";
 
-import { useState } from "react";
+import { useState, useTransition } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { signIn } from "next-auth/react";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useForm } from "react-hook-form";
 import { z } from "zod";
 import { toast } from "sonner";
-import { Loader2, Lock, Mail, Eye, EyeOff, Info } from "lucide-react";
+import { Loader2, Lock, Mail, Eye, EyeOff, ShieldAlert, Phone } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import {
@@ -20,6 +20,16 @@ import {
   FormMessage,
 } from "@/components/ui/form";
 import { Input } from "@/components/ui/input";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
+
+import { resetPasswordTanpaEmail } from "@/app/actions/auth-actions";
 
 const loginSchema = z.object({
   email: z.string().email("Format email tidak valid"),
@@ -34,7 +44,11 @@ export function LoginForm() {
   const [isLoading, setIsLoading] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
   
-  // 🔍 FIX: Ubah default fallback dari "/pesan" menjadi "/menu"
+  // State untuk kontrol Modal Lupa Password
+  const [isForgotOpen, setIsForgotOpen] = useState(false);
+  const [showNewPassword, setShowNewPassword] = useState(false);
+  const [isPending, startTransition] = useTransition();
+  
   const callbackUrl = searchParams.get("callbackUrl") || "/menu";
 
   const form = useForm<LoginFormValues>({
@@ -47,7 +61,6 @@ export function LoginForm() {
 
   async function onSubmit(values: LoginFormValues) {
     setIsLoading(true);
-    
     try {
       const result = await signIn("credentials", {
         email: values.email,
@@ -66,7 +79,6 @@ export function LoginForm() {
         description: "Berhasil masuk ke akun Anda.",
       });
 
-      // Mengarahkan ke /menu (atau sesuai callbackUrl dari halaman yang di-protect)
       router.push(callbackUrl);
       router.refresh();
       
@@ -77,6 +89,22 @@ export function LoginForm() {
     } finally {
       setIsLoading(false);
     }
+  }
+
+  // Handler Kirim Form Lupa Password
+  async function handleResetPassword(e: React.FormEvent<HTMLFormElement>) {
+    e.preventDefault();
+    const formData = new FormData(e.currentTarget);
+
+    startTransition(async () => {
+      const res = await resetPasswordTanpaEmail(formData);
+      if (res.success) {
+        toast.success("Pemulihan Berhasil", { description: res.message });
+        setIsForgotOpen(false);
+      } else {
+        toast.error("Pemulihan Gagal", { description: res.message });
+      }
+    });
   }
 
   return (
@@ -117,7 +145,13 @@ export function LoginForm() {
               <FormItem className="space-y-1.5">
                 <div className="flex items-center justify-between ml-1">
                   <FormLabel className="text-slate-700 font-bold">Password</FormLabel>
-                  <button type="button" className="text-xs font-bold text-orange-600 hover:text-orange-700">Lupa Password?</button>
+                  <button 
+                    type="button" 
+                    onClick={() => setIsForgotOpen(true)}
+                    className="text-xs font-bold text-orange-600 hover:text-orange-700 transition-colors"
+                  >
+                    Lupa Password?
+                  </button>
                 </div>
                 <FormControl>
                   <div className="relative group">
@@ -162,25 +196,98 @@ export function LoginForm() {
         </form>
       </Form>
 
-      {/* Demo Credentials */}
-      <div className="mt-8 overflow-hidden rounded-2xl border border-blue-100 bg-blue-50/50">
-        <div className="flex items-center gap-2 bg-blue-100/50 px-4 py-2 text-blue-700">
-          <Info className="h-4 w-4" />
-          <span className="text-[10px] font-black uppercase tracking-widest">Admin Access</span>
-        </div>
-        <div className="p-4 grid grid-cols-1 sm:grid-cols-2 gap-4 text-[13px]">
-          <div className="space-y-1">
-            <p className="text-slate-400 font-bold uppercase text-[10px]">Administrator</p>
-            <p className="text-slate-700 font-medium">admin@catering.com</p>
-            <p className="text-slate-500 font-mono bg-white px-1.5 py-0.5 rounded border border-slate-100 inline-block">admin123</p>
-          </div>
-          <div className="space-y-1">
-            <p className="text-slate-400 font-bold uppercase text-[10px]">Logistik/Kurir</p>
-            <p className="text-slate-700 font-medium">kurir@catering.com</p>
-            <p className="text-slate-500 font-mono bg-white px-1.5 py-0.5 rounded border border-slate-100 inline-block">admin123</p>
-          </div>
-        </div>
-      </div>
+      {/* 🔐 MODAL DIALOG LUPA PASSWORD */}
+      <Dialog open={isForgotOpen} onOpenChange={setIsForgotOpen}>
+        <DialogContent className="sm:max-w-110 rounded-3xl p-6 border-none shadow-2xl">
+          <DialogHeader className="space-y-2">
+            <div className="h-12 w-12 rounded-2xl bg-orange-50 text-orange-600 flex items-center justify-center mb-2 shadow-sm border border-orange-100">
+              <ShieldAlert className="h-6 w-6" />
+            </div>
+            <DialogTitle className="text-xl font-black text-slate-900 tracking-tight">
+              Pulihkan Akun Anda
+            </DialogTitle>
+            <DialogDescription className="text-slate-500 text-xs font-medium leading-relaxed">
+              Verifikasi identitas akun katering Anda dengan memasukkan Email dan Nomor Telepon aktif yang telah terdaftar.
+            </DialogDescription>
+          </DialogHeader>
+
+          <form onSubmit={handleResetPassword} className="space-y-4 mt-2">
+            <div className="space-y-1">
+              <label className="text-xs font-bold text-slate-700 ml-1">Email Terdaftar</label>
+              <div className="relative">
+                <Mail className="absolute left-4 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
+                <Input 
+                  name="email" 
+                  type="email" 
+                  required 
+                  placeholder="contoh@email.com" 
+                  className="pl-11 rounded-xl border-slate-200 bg-slate-50/50 h-11 text-sm"
+                />
+              </div>
+            </div>
+
+            <div className="space-y-1">
+              <label className="text-xs font-bold text-slate-700 ml-1">Nomor Telepon WA</label>
+              <div className="relative">
+                <Phone className="absolute left-4 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
+                <Input 
+                  name="noTelp" 
+                  type="text" 
+                  required 
+                  placeholder="08xxxxxxxxxx" 
+                  className="pl-11 rounded-xl border-slate-200 bg-slate-50/50 h-11 text-sm"
+                />
+              </div>
+            </div>
+
+            <div className="space-y-1 border-t border-dashed border-slate-100 pt-3">
+              <label className="text-xs font-bold text-slate-700 ml-1">Password Baru</label>
+              <div className="relative">
+                <Lock className="absolute left-4 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
+                <Input 
+                  name="passwordBaru" 
+                  type={showNewPassword ? "text" : "password"} 
+                  required 
+                  placeholder="Minimal 6 Karakter" 
+                  className="pl-11 pr-11 rounded-xl border-slate-200 bg-slate-50/50 h-11 text-sm"
+                />
+                <button
+                  type="button"
+                  onClick={() => setShowNewPassword(!showNewPassword)}
+                  className="absolute right-4 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 transition-colors"
+                >
+                  {showNewPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                </button>
+              </div>
+            </div>
+
+            <DialogFooter className="mt-6 gap-2 sm:gap-0">
+              <Button 
+                type="button" 
+                variant="outline" 
+                onClick={() => setIsForgotOpen(false)}
+                className="rounded-xl border-slate-200 text-slate-500 font-bold text-sm h-11"
+              >
+                Batal
+              </Button>
+              <Button 
+                type="submit" 
+                disabled={isPending}
+                className="rounded-xl bg-orange-600 hover:bg-orange-700 text-white font-bold text-sm h-11 shadow-md shadow-orange-100 border-none"
+              >
+                {isPending ? (
+                  <>
+                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                    Memproses...
+                  </>
+                ) : (
+                  "Setel Ulang Password"
+                )}
+              </Button>
+            </DialogFooter>
+          </form>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

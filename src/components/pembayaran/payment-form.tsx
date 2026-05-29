@@ -76,16 +76,18 @@ export function PaymentForm({ pesanan }: { pesanan: Pesanan }) {
       }
       setBuktiFile(file);
       
+      // 🛠️ CARA BARU: Langsung buat blob URL instan untuk preview lokal di browser
+      const localPreviewUrl = URL.createObjectURL(file);
+      setPreviewUrl(localPreviewUrl);
+
+      // 🔄 PROSES BACKGROUND: Tetap konversi ke Base64 untuk dikirim ke Server Actions saat submit
       const reader = new FileReader();
-      reader.onload = (event) => {
-        const arrayBuffer = event.target?.result as ArrayBuffer;
-        const bufferData = Buffer.from(arrayBuffer); 
-        const base64String = bufferToBase64(bufferData);
-        const dataUrl = `data:${file.type};base64,${base64String}`;
-        setPreviewUrl(dataUrl);
+      reader.onloadend = () => {
+        const base64String = reader.result as string;
+        // Kita simpan base64 ini ke state previewUrl atau state khusus saat submit
+        setPreviewUrl(base64String); 
       };
-      
-      reader.readAsArrayBuffer(file);
+      reader.readAsDataURL(file); // Mengubah file langsung jadi data:image/...;base64
     }
   };
 

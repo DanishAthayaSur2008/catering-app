@@ -1,14 +1,14 @@
-// src/components/dashboard/kurir-dashboard.tsx
 import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
-import { MapPin, Clock, CheckCircle, Truck, Phone, Package, RefreshCw, Navigation, Camera } from "lucide-react";
+import { MapPin, Clock, CheckCircle, Truck, Phone, Package, RefreshCw, Navigation } from "lucide-react";
 import Link from "next/link";
-import { updateStatusKirim, uploadBuktiFoto } from "@/app/actions/pengiriman-actions";
 import { cn } from "@/lib/utils";
+import { updateStatusKirim, uploadBuktiFoto } from "@/app/actions/pengiriman-actions";
+import { SubmitButton } from "./submit-button"; // 👈 Import dari file atas
 
 function getStatusKirimColor(status: string): string {
   const colors: Record<string, string> = {
@@ -57,7 +57,6 @@ export async function KurirDashboard() {
           updatedAt: { gte: new Date(new Date().setHours(0, 0, 0, 0)) }
         }
       }),
-      // ✅ Hanya tampilkan tugas yang BELUM SELESAI (Belum_Dikirim atau Sedang_Dikirim)
       prisma.pengiriman.findMany({
         where: { 
           kurirId, 
@@ -161,7 +160,7 @@ export async function KurirDashboard() {
         </Card>
       </div>
 
-      {/* List Tugas Aktif - BELUM SELESAI */}
+      {/* List Antrean Tugas */}
       <div className="space-y-4">
         <div className="flex items-center gap-2 px-2">
           <Navigation className="h-5 w-5 text-primary" />
@@ -229,20 +228,21 @@ export async function KurirDashboard() {
                         </Button>
                       )}
 
-                      {/* ✅ Tombol Mulai Kirim - hanya jika Belum_Dikirim */}
+                      {/* Tombol Mulai Kirim */}
                       {pengiriman.statusKirim === "Belum_Dikirim" && (
                         <form className="w-full" action={async () => {
                           "use server";
                           await updateStatusKirim(pengiriman.id, "Sedang_Dikirim");
                         }}>
-                          <Button type="submit" size="sm" className="w-full rounded-xl font-bold shadow-lg shadow-primary/20 gap-2">
-                            <Truck className="h-4 w-4" />
-                            Mulai Kirim
-                          </Button>
+                          <SubmitButton 
+                            text="Mulai Kirim" 
+                            iconName="truck" 
+                            className="shadow-lg shadow-primary/20" 
+                          />
                         </form>
                       )}
 
-                      {/* ✅ Tombol Upload Bukti - hanya jika Sedang_Dikirim */}
+                      {/* Tombol Upload Bukti */}
                       {pengiriman.statusKirim === "Sedang_Dikirim" && (
                         <div className="space-y-2 w-full">
                           <form className="w-full space-y-2" action={async (formData: FormData) => {
@@ -257,10 +257,11 @@ export async function KurirDashboard() {
                               required
                               className="text-xs bg-white rounded-xl cursor-pointer"
                             />
-                            <Button type="submit" size="sm" className="w-full rounded-xl font-bold bg-blue-600 hover:bg-blue-700 shadow-lg shadow-blue-200 gap-2">
-                              <Camera className="h-4 w-4" />
-                              Upload Bukti
-                            </Button>
+                            <SubmitButton 
+                              text="Upload Bukti" 
+                              iconName="camera" 
+                              className="bg-blue-600 hover:bg-blue-700 shadow-lg shadow-blue-200" 
+                            />
                           </form>
                           <p className="text-[10px] text-muted-foreground text-center">
                             📋 Setelah upload, admin akan approve untuk menandai selesai.
@@ -268,7 +269,7 @@ export async function KurirDashboard() {
                         </div>
                       )}
 
-                      {/* ✅ Indikator: Menunggu Approval */}
+                      {/* Indikator: Menunggu Approval */}
                       {pengiriman.buktiFoto && pengiriman.statusKirim === "Sedang_Dikirim" && (
                         <Badge variant="outline" className="w-full justify-center text-amber-600 border-amber-200">
                           <Clock className="h-3 w-3 mr-1" />
